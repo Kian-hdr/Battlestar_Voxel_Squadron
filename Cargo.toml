@@ -1,0 +1,40 @@
+[package]
+name = "battlestar_voxel"
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.99.1"
+authors = ["Kian Konrad Tajbakhsh"]
+license = "MIT"
+publish = false
+
+[features]
+default = ["graphics"]
+graphics = ["dep:bevy"]
+
+[dependencies]
+glam = { version = "=0.30.10", default-features = false, features = ["std"] }
+bevy = { version = "=0.17.3", optional = true, default-features = false, features = ["std", "async_executor", "multi_threaded", "bevy_asset", "bevy_audio", "wav", "bevy_color", "bevy_core_pipeline", "bevy_pbr", "bevy_render", "bevy_image", "bevy_mesh", "bevy_camera", "bevy_light", "bevy_shader", "bevy_text", "bevy_ui", "bevy_ui_render", "bevy_window", "bevy_winit", "bevy_log", "default_font", "png", "x11", "wayland"] }
+
+[[bin]]
+name = "battlestar_voxel"
+path = "src/main.rs"
+required-features = ["graphics"]
+test = false
+
+[[example]]
+name = "model_review"
+path = "examples/model_review.rs"
+required-features = ["graphics"]
+
+[profile.dev]
+opt-level = 1
+debug = 0
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+strip = "debuginfo"

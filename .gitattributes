@@ -1,0 +1,8 @@
+# Preserve original third-party license bytes, including upstream whitespace.
+docs/Dependency_Licenses/Texts/* -text -whitespace
+assets/Fonts/*OFL.txt -text -whitespace
+*.png binary
+*.wav binary
+*.ttf binary
+*.car binary
+*.icns binary

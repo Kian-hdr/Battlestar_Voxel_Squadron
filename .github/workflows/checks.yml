@@ -1,0 +1,39 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulation:
+    name: Simulation and formatting (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Test pure Rust gameplay and voxel geometry
+        run: cargo test --locked --no-default-features
+      - name: Check pure Rust compiler warnings
+        run: cargo clippy --locked --no-default-features --all-targets -- -D warnings

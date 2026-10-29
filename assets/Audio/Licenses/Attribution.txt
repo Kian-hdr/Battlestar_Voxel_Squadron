@@ -1,0 +1,40 @@
+CURRENT RUNTIME ELECTRONIC EFFECTS
+Generated with ElevenLabs (elevenlabs.io), model eleven_text_to_sound_v2,
+29-Oct-2026, at Kian's explicit request for original subtle electronic sci-fi SFX.
+The generated and processed audio is subject to the generating account's terms
+and plan. It is not offered under MIT, CC BY or a blanket royalty-free license.
+Private prototype use only. Do not redistribute the isolated raw or processed
+files, publish them in an open source archive, or create an audio/sample library.
+See https://elevenlabs.io/creative-terms (Sound Effects, Exhibit 4) and
+https://elevenlabs.io/terms-of-use plus the account agreement/plan.
+Account plan and any publication-specific attribution requirement are unverified.
+Suggested credit: Electronic effects generated with ElevenLabs · elevenlabs.io
+
+Postprocessing: mono mixdown, gentle high/low filtering, soft attack/release,
+short silent padding, attenuation-only peak/RMS caps, 44.1kHz 16-bit PCM WAV.
+Original generated takes, prompts, model parameters, flow/node/session/generation
+IDs and exact selected takes are retained in Generated/Generation_Receipt.json.
+No franchise sound recordings, voice, music or extracted assets were supplied.
+
+HISTORICAL RETAINED SOURCE SAMPLES (NOT CURRENTLY PLAYED)
+Audio assets by Michel Baradari (apollo-music.de), hosted on OpenGameArt.org.
+Licensed under Creative Commons Attribution 3.0 Unported (CC BY 3.0):
+https://creativecommons.org/licenses/by/3.0/
+Legal code: https://creativecommons.org/licenses/by/3.0/legalcode
+
+"Chaingun, pistol, rifle, shotgun shots"
+https://opengameart.org/content/chaingun-pistol-rifle-shotgun-shots
+Original selected files: cg1.wav, pistol.wav, rifle.wav.
+
+"2 High Quality Explosions"
+https://opengameart.org/content/2-high-quality-explosions
+Original selected files: explode.wav, explodemini.wav.
+
+Modifications by Kian Konrad Tajbakhsh / Battlestar Voxel, 29-Oct-2026:
+trimmed past the sharp onset, pitch-adjusted, band-filtered, layered with quiet
+delayed copies, mixed to mono, softly faded and attenuated with peak/RMS caps,
+then encoded as 44.1 kHz 16-bit PCM WAV. No post-filter gain boost is applied. Historical derivatives in recovery remain CC BY 3.0; current runtime effects
+use the separate ElevenLabs terms described above.
+See docs/Audio_Provenance.md and script/prepare_audio.py for the exact recipe.
+Source assets and derivatives are separately licensed audio, not MIT code.
+No endorsement by the original creator is implied.

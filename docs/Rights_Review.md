@@ -1,0 +1,39 @@
+# Rights review
+
+Reviewed 29-Oct-2026. Kian explicitly authorized public MIT source, GitHub game releases for macOS/Windows/Linux and game screenshots. This supersedes the earlier private-only release instruction. Authorization from the project owner is recorded separately from third-party rights: no franchise rights-holder permission has been obtained. This is a source-based issue review, not a legal opinion or worldwide clearance. No rights holder was contacted by this review.
+
+## Findings
+
+- **Original code:** standard MIT lets others inspect, modify and redistribute original software, including commercial reuse, while retaining its notice. It cannot license rights the author does not own. The project therefore separates software licensing from third-party franchise rights. See the [OSI MIT text](https://opensource.org/license/mit) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+- **Battlestar theme:** [NBCUniversal's terms](https://www.nbcuniversal.com/terms), sections 2.1 and 3.1, describe limited service access and ownership of service content. The derivative-content language depends on authorization. These service terms are not evidence of a blanket independent fan-game license. They do not establish the complete ownership/licensing chain for every Battlestar element. Rights-holder permission for this prototype has not been obtained.
+- **Procedural ships:** generating a mesh yourself avoids importing a show model but does not resolve rights in recognizable underlying fictional designs. The [U.S. Copyright Office's derivative-work guidance](https://www.copyright.gov/eco/help-limitation.html) distinguishes new authorship from preexisting material and describes adaptation as an exclusive copyright right. Whether this specific game infringes has not been adjudicated or professionally assessed.
+- **Noncommercial status:** the [U.S. Copyright Office fair-use guidance](https://www.copyright.gov/fair-use/more-info.html) requires a case-specific balance of purpose, nature, amount and market effect. Noncommercial use alone does not establish fair use. Neither attribution nor a disclaimer guarantees protection against a complaint, takedown or legal claim.
+- **Galaga:** the [official Bandai Namco product attribution](https://bandainamco-am.com/collections/ms-pacman-galaga-pixel-bash-edition) identifies GALAGA as a Bandai Namco Entertainment mark. The reference here describes gameplay inspiration and grants no trademark or game-content license. No copied Galaga artwork, audio or code is intended.
+
+## Public-release status and remaining rights risk
+
+The original software has an open-source license and the owner has authorized publication. The fan-themed game is **not independently cleared by franchise rights holders**. MIT, attribution, free access and a noncommercial notice do not establish such clearance. Source, screenshots, names and recognizable ship designs may still prompt a complaint, takedown or claim. The earlier advice to keep the prototype private was a risk-reduction recommendation, not evidence of a newly obtained license. No legal guarantee is made for the authorized release.
+
+The Copyright Office sources discuss U.S. law. They do not resolve law in the UAE, Germany or other distribution markets, trademark/confusion questions, or the precise rights in each ship depiction. Suitable permission or jurisdiction-specific legal review can resolve these questions; independently designed names and expression can reduce franchise dependence. Rebranding alone may leave underlying design issues unresolved.
+
+## Public staging roster
+
+Use an explicit allowlist, with source builds tested from the resulting clean checkout:
+
+- Include Cargo.toml, Cargo.lock, rust-toolchain.toml, build.rs, src/, tests/, examples/, LICENSE, README.md and THIRD_PARTY_NOTICES.md. Include only maintained public build/package/validation scripts, including generate_dependency_notices.py and the release-audio restoration helper (secret names/hash pins are configuration, never secret values).
+- Include assets/Fonts with both original OFL notices; assets/Audio/Public with its NOTICE.txt; CC BY original samples under assets/Audio/Source and their original source notices/attribution; original editable icon SVG/icon.json and required compiled icon assets. These are separately licensed where indicated. Include no external reference photographs.
+- Include docs/Rights_Review.md, docs/Dependency_Licenses/ in full, docs/Audio_Public_Source.md and reviewed public gameplay/build documentation. Publish only selected actual game screenshots, cropped to exclude desktop/account/window context; screenshots do not carry an implied franchise license.
+- Exclude .codex/, private agent settings, Checkpoints/, target/, dist/ from source staging; exclude unreviewed evidence logs, lifecycle stack samples/process reports, private handoffs/plans and local review drafts. Logs/checkpoints can contain user names, absolute paths, device details and old private media. A release archive is intentionally assembled from approved binaries/notices, not uploaded as an unfiltered dist tree.
+- Exclude assets/Audio/Generated/, assets/Audio/Processed/, assets/Audio/Manifest.json, private flow/generation receipts, docs/Audio_Provenance.md and script/prepare_audio.py. Do not publish temporary restored release-audio files, credentials, .env files, secret packs, signing/notarization credentials or CI debug dumps. Inspect .cargo/config.toml before inclusion; the observed build-jobs setting contains no secrets.
+
+The public-audio source path uses redistributable CC BY fallback sounds. Official noncommercial binaries may incorporate generated SFX under the account agreement and current ElevenCreative terms; isolated provider audio remains excluded. Commercial entitlement is unverified and unnecessary to claim for this noncommercial release. Any added soundtrack requires separate verification of its model/provider terms before binary inclusion; SFX terms do not license music.
+
+## Dependency notice audit
+
+Cargo metadata was resolved offline and locked for aarch64-apple-darwin, x86_64-pc-windows-msvc and x86_64-unknown-linux-gnu. The union covers **388 registry packages**, including conservative build/proc-macro dependencies. Declared expressions all offer permissive paths, with additional conjunctive obligations such as Unicode-3.0 retained. No GPL/LGPL alternative is selected when a permissive OR choice exists.
+
+[Dependency_Licenses/README.md](Dependency_Licenses/README.md) and Inventory.json map exact versions to original local-crate or immutable upstream notice texts and SHA-256 hashes. Five packages omit upstream text; their standard SPDX supplements retain original Cargo authors/license declarations and explicitly flag that provenance limitation. No upstream copyright year or unrecorded grant is invented. The collector preserves bundled nested notices, including the default embedded font. This is a license-notice audit, not a dependency-security review, precise linked-code inventory, or worldwide legal clearance. Platform operating-system libraries and any separately redistributed runtime libraries require their own packaging checks. Retain the whole notice directory in every binary release.
+
+## Current handoff
+
+Public release is owner-authorized; third-party franchise permission remains absent. Original code remains MIT. Public source uses CC BY fallback audio and OFL fonts; official generated SFX remain separately restricted to incorporated-game use under applicable terms. Complete dependency notices are prepared with five explicitly identified standard-text supplements. Final source allowlisting, clean build tests, target packaging checks, soundtrack qualification and actual upload verification belong to the release owner. This review performed no upload or commit.

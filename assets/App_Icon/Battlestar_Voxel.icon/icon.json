@@ -1,0 +1,25 @@
+{
+  "groups": [
+    {
+      "layers": [
+        {
+          "name": "Viper",
+          "image-name": "Viper.svg",
+          "glass": false
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  },
+  "fill": "system-dark"
+}

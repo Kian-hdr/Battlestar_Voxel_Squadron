@@ -1,0 +1,11 @@
+Public-source fallback effects adapted from Michel Baradari (apollo-music.de):
+Chaingun, pistol, rifle, shotgun shots
+https://opengameart.org/content/chaingun-pistol-rifle-shotgun-shots
+2 High Quality Explosions
+https://opengameart.org/content/2-high-quality-explosions
+CC BY 3.0: https://creativecommons.org/licenses/by/3.0/
+Changes by Kian Konrad Tajbakhsh: mono conversion, filtering, fades, trim/padding,
+attenuation, PCM encoding. These fallback derivatives retain CC BY 3.0.
+Official binaries can instead embed private ElevenLabs electronic effects under
+https://elevenlabs.io/creative-terms and the generating account's agreement.
+Those provider audio files are excluded from public source and are not MIT.
