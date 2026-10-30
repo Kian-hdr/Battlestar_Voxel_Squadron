@@ -1,6 +1,6 @@
 # Desktop release validation · v0.4.1
 
-macOS bundle build 14. Verified 30-Oct-2026 on Apple M5 / macOS 27.2. Native Windows/Linux package jobs and final notarization receipts are recorded below after completion.
+macOS bundle build 14. Verified 30-Oct-2026 on Apple M5 / macOS 27.2. Native Windows/Linux package jobs and final notarization receipts are complete and recorded below.
 
 - All 72 regression tests pass, including 2,000 exact collision comparisons against the previous algorithm, viewport/shadow/infinite-camera tests and exhaust/hull separation. Formatting and all-target release Clippy pass.
 - Full silent native scenario passes both eras, debris contacts/cooling/subdivision, pause, restart, death, resize and normal runner shutdown. Player visibility is checked on every gameplay frame, including respawn protection.
@@ -11,6 +11,26 @@ macOS bundle build 14. Verified 30-Oct-2026 on Apple M5 / macOS 27.2. Native Win
 The old build reproduced severe stalls in a separate scripted sample (56.934 ms mean / 203.704 ms p95). Focus/workload and timing-instrumentation differences limit a direct causal FPS ratio: the new build retains more debris and records uncapped real time, while the old telemetry used capped virtual time. The collision benchmark compares identical inputs with exact output equivalence. The final native test includes HDR lighting cost.
 
 License inventory covers 389 pinned packages with zero missing notices; historical provenance limits below remain. Native Windows/Linux graphical gameplay and other-device performance remain untested. Owner aesthetic acceptance is separate from these checks. macOS normal installed movement/fire, pause/resume, mute, fullscreen and Command+Q were also checked; the final correction changes debris projection/drift only.
+
+## v0.4.1 package and source identity
+
+Compiled game source: `267d2ecb98b0e518ba389405578e4d77f9e46f44`. [Native package run](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41113758169) completed successfully: the original successful Linux job was reused, and only the Windows job canceled for the owner's pause was retried. [Source checks](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41113757168) pass. Actual native job logs record 72 passing tests on each OS, plus successful graphics Clippy, release link and packaging.
+
+| Package | Completed checks | Runtime boundary |
+| --- | --- | --- |
+| macOS Apple Silicon, build 14 | Developer ID, hardened runtime, timestamp, app and DMG Accepted notarization, stapling, Gatekeeper, final-DMG install and binary hash; native controls and complete renderer scenario | Tested on Apple M5 / macOS 27.2 |
+| Windows x64 | Native MSVC build; PE32+ x64 GUI; 254-file roster, 253 internal checksums, source notices and approved embedded sound mix; external checksum and safe paths | Unsigned; graphical gameplay not tested |
+| Linux x64 | Native Ubuntu 22.04 build; ELF64 x64, executable/launcher permissions, 255-file roster, 254 internal checksums, source notices and approved embedded sound mix; external checksum and safe paths | Graphical gameplay not tested; needs compatible desktop graphics/audio libraries |
+
+Mac app notarization: `cc7773f0-1afd-4d54-a784-0a5dd563fa65`; DMG: `3a1299f1-46a2-404a-86e9-9bb826b3d08f`. Both final artifacts are Accepted and stapled. The installed copy came from the final DMG and matches its verified executable hash.
+
+Windows ordinary Git text files use CRLF checkout line endings; their canonical source content matches. Notices explicitly marked for byte preservation remain exact. All internal checksums identify actual packaged bytes. Neither native archive includes loose private audio, credentials or private histories. The selected sound mix is verified as embedded in each executable.
+
+The release tag also contains final documentation and seven refreshed actual game screenshots. Gameplay/rendering/build inputs are unchanged from the compiled source above. Documentation images are resized to at most 1920 pixels on their longest edge; original native captures remain retained as validation evidence. No AI raster generation or content retouching was used.
+
+Three platform packages, individual checksum files and aggregate `SHA256SUMS.txt` are provided as seven release assets. Their SHA-256 values identify the final downloadable bytes. Native Windows/Linux graphical qualification remains a separate follow-up; build and archive checks do not establish target GPU acceptance.
+
+## Historical v0.4.0 validation
 
 # Desktop release validation · v0.4.0
 
