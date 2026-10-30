@@ -1,16 +1,16 @@
 # Desktop release validation · v0.4.1
 
-macOS bundle build14. Local verification completed30-Oct-2026 on Apple M5 / macOS27.2. Native Windows/Linux package jobs are recorded below after completion.
+macOS bundle build 14. Verified 30-Oct-2026 on Apple M5 / macOS 27.2. Native Windows/Linux package jobs and final notarization receipts are recorded below after completion.
 
-- 71 regression tests pass, including2,000 exact collision comparisons against the previous algorithm, viewport-edge/shadow tests and exhaust/hull separation. Formatting and all-target release Clippy pass.
+- All 72 regression tests pass, including 2,000 exact collision comparisons against the previous algorithm, viewport/shadow/infinite-camera tests and exhaust/hull separation. Formatting and all-target release Clippy pass.
 - Full silent native scenario passes both eras, debris contacts/cooling/subdivision, pause, restart, death, resize and normal runner shutdown. Player visibility is checked on every gameplay frame, including respawn protection.
-- Debris now retires only when its full bounding sphere leaves the camera view. The scenario retained pieces beyond the old1.05-second timeout and retired2,130 pieces offscreen; peak1,934 cells across9 concurrent events. Spatial shadow keeps opaque geometry legible. Restart explicitly clears the old run.
-- With emissive exhaust/projectiles, restrained HDR bloom and red impact lighting enabled,1,021 physical1920×1080 frames average8.333ms, p958.783ms (about120FPS). The full scenario averages9.69ms with p9513.82ms. Results are specific to this Mac and scripted workload.
-- A focused CPU microbenchmark of1,024 short Galactica collision sweeps improved72.06ms to3.21ms (22.44×); this is not a whole-game FPS multiplier.
+- Debris retires only when its full bounding sphere leaves the actual infinite camera view. Natural outward/background drift clears tall and wide views without a lifetime or oldest-effect eviction. The scenario retained pieces beyond the old 1.05-second timeout, retired 2,059 pieces offscreen and peaked at 2,128 cells across nine concurrent events. Spatial shadow retains opaque, legible geometry. Restart explicitly clears the old run.
+- With emissive exhaust/projectiles, restrained HDR bloom and red impact lighting enabled, 992 physical 1920×1080 frames average 8.577 ms, p95 10.440 ms (about 117 FPS). The complete 6,143-frame scenario averages 8.47 ms, p95 8.95 ms. Results are specific to this Mac and scripted workload.
+- A CPU microbenchmark of 1,024 identical short Galactica collision sweeps improved 72.06 ms to 3.21 ms (22.44×); this is not a whole-game FPS multiplier.
 
-The old build reproduced severe stalls in a separate scripted sample (56.934ms mean /203.704ms p95). Focus/workload and timing-instrumentation differences limit a direct causal FPS ratio: the new build retains more debris and records uncapped real time, while the old telemetry used capped virtual time. The collision benchmark compares identical inputs with exact output equivalence. The final native test includes the new HDR lighting cost.
+The old build reproduced severe stalls in a separate scripted sample (56.934 ms mean / 203.704 ms p95). Focus/workload and timing-instrumentation differences limit a direct causal FPS ratio: the new build retains more debris and records uncapped real time, while the old telemetry used capped virtual time. The collision benchmark compares identical inputs with exact output equivalence. The final native test includes HDR lighting cost.
 
-License inventory now covers389 pinned packages with zero missing notices; existing provenance limits below remain. Native Windows/Linux graphical gameplay and other-device performance remain untested. Owner aesthetic acceptance is separate from these checks.
+License inventory covers 389 pinned packages with zero missing notices; historical provenance limits below remain. Native Windows/Linux graphical gameplay and other-device performance remain untested. Owner aesthetic acceptance is separate from these checks. macOS normal installed movement/fire, pause/resume, mute, fullscreen and Command+Q were also checked; the final correction changes debris projection/drift only.
 
 # Desktop release validation · v0.4.0
 

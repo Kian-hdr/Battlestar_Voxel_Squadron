@@ -184,7 +184,7 @@ fn take_indices(mesh: &mut Mesh) -> Vec<u32> {
     }
 }
 // Build visual buffers once per display frame. Fixed simulation never uploads meshes.
-fn draw(effect: &Active, meshes: &mut Assets<Mesh>) -> usize {
+fn draw(effect: &Active, meshes: &mut Assets<Mesh>, camera_forward: Vec3) -> usize {
     let solid = meshes.get_mut(&effect.solid).unwrap();
     let mut positions = take_vec3(solid, Mesh::ATTRIBUTE_POSITION);
     let mut normals = take_vec3(solid, Mesh::ATTRIBUTE_NORMAL);
@@ -217,7 +217,10 @@ fn draw(effect: &Active, meshes: &mut Assets<Mesh>) -> usize {
             } else {
                 original
             };
-            color = battlestar_voxel::viewport::debris_shadow_tint(color, body.position.z);
+            color = battlestar_voxel::viewport::debris_shadow_tint(
+                color,
+                camera_forward.dot(body.position - effect.origin),
+            );
             let posed: [[f32; 3]; 4] = std::array::from_fn(|corner| {
                 let p = quad[corner];
                 (body.position + body.rotation * (Vec3::from_array(p) - pivot)).to_array()
@@ -262,6 +265,7 @@ pub(super) fn render(
     session: Res<Session>,
     mut state: ResMut<ShatterEffects>,
     mut meshes: ResMut<Assets<Mesh>>,
+    camera: Single<&Transform, With<Camera3d>>,
 ) {
     if session.0.phase == Phase::Paused {
         return;
@@ -269,7 +273,7 @@ pub(super) fn render(
     let hot_vertices = state
         .active
         .iter()
-        .map(|effect| draw(effect, &mut meshes))
+        .map(|effect| draw(effect, &mut meshes, *camera.forward()))
         .sum();
     state.peak_hot_vertices = state.peak_hot_vertices.max(hot_vertices);
 }
@@ -474,12 +478,16 @@ pub(super) fn update(
         return;
     };
     let aspect = window.physical_width() as f32 / window.physical_height().max(1) as f32;
-    let clip = Mat4::perspective_rh(
-        battlestar_voxel::viewport::battle_fov(aspect),
-        aspect,
-        p.near,
-        p.far,
-    ) * camera_transform.to_matrix().inverse();
+    let fov = battlestar_voxel::viewport::battle_fov(aspect);
+    // Bevy uses an infinite reverse-Z projection. A synthetic finite far plane
+    // would remove still-visible debris from these uncullable batched meshes.
+    let clip = Mat4::perspective_infinite_reverse_rh(fov, aspect, p.near)
+        * camera_transform.to_matrix().inverse();
+    let drift = battlestar_voxel::viewport::background_drift(
+        *camera_transform.forward(),
+        *camera_transform.up(),
+        fov,
+    );
     let targets = targets(&session, &galactica, dt);
     let mut bounces = 0;
     let mut peak_speed = 0_f32;
@@ -500,7 +508,7 @@ pub(super) fn update(
             let flight_dt = (effect.age - b.release).max(0.) - (previous_age - b.release).max(0.);
             if flight_dt > 0. {
                 // Recede gently while retaining the opaque, cooling hull.
-                b.velocity.z -= 2.5 * flight_dt;
+                b.velocity += drift * flight_dt;
                 let contacts = move_body(b, flight_dt, dt - flight_dt, &targets);
                 bounces += contacts;
                 if contacts > 0 {

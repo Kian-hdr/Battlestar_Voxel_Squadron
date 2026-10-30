@@ -8,9 +8,9 @@ A native Rust 3D voxel arcade game by **Kian Konrad Tajbakhsh**. Fly a Viper, de
 
 Get the desktop packages from [GitHub Releases](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases). This is an early playable fan prototype.
 
-- **[macOS DMG, Apple Silicon](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.1/Battlestar_Voxel_Squadron_v0.4.1_macOS_Apple_Silicon.dmg):** open the DMG, drag `Battlestar_Voxel_Squadron.app` to Applications, then launch it.
-- **[Windows ZIP, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.1/Battlestar_Voxel_Squadron_v0.4.1_Windows_x86_64.zip):** extract the ZIP and run `Battlestar_Voxel_Squadron.exe`.
-- **[Linux archive, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.1/Battlestar_Voxel_Squadron_v0.4.1_Linux_x86_64.tar.gz):** extract the archive, install the runtime libraries listed in its README, and run `./Battlestar_Voxel_Squadron` in a graphical session with a Vulkan driver.
+- **[macOS DMG, Apple Silicon](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.0/Battlestar_Voxel_Squadron_v0.4.0_macOS_Apple_Silicon.dmg):** open the DMG, drag `Battlestar_Voxel_Squadron.app` to Applications, then launch it.
+- **[Windows ZIP, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.0/Battlestar_Voxel_Squadron_v0.4.0_Windows_x86_64.zip):** extract the ZIP and run `Battlestar_Voxel_Squadron.exe`.
+- **[Linux archive, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.0/Battlestar_Voxel_Squadron_v0.4.0_Linux_x86_64.tar.gz):** extract the archive, install the runtime libraries listed in its README, and run `./Battlestar_Voxel_Squadron` in a graphical session with a Vulkan driver.
 
 No account, server or internet connection is needed to play. [Validation notes](docs/Release_Validation.md) state which platforms were build-tested and which were played. Windows binaries are unsigned; SmartScreen may show an unknown-publisher warning.
 
