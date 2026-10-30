@@ -8,7 +8,7 @@ Where OR alternatives exist, use a permissive option (MIT, Apache-2.0, BSD, ISC,
 
 Regenerate with python3 script/generate_dependency_notices.py --fetch-missing after dependency changes; Cargo must already have the pinned crates cached. Immutable upstream commit URLs fill notices omitted from crate packages. Review missing notices before distribution.
 
-Packages: 388. Missing notice records: 0.
+Packages: 389. Missing notice records: 0.
 
 Five crates omit upstream license texts: block 0.1.6, dispatch 0.2.0, malloc_buf 0.0.6, constgebra 0.1.4 and hexf-parse 0.2.1. Their records explicitly use standard SPDX text supplements plus original crate authors/license declarations, not reconstructed historical copyright notices. These are the remaining provenance limitation; no historical year or additional upstream grant is invented.
 
@@ -71,6 +71,7 @@ Five crates omit upstream license texts: block 0.1.6, dispatch 0.2.0, malloc_buf
 | bevy_pbr 0.17.3 | MIT OR Apache-2.0 | [text 1](Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt) [text 2](Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt) |
 | bevy_picking 0.17.3 | MIT OR Apache-2.0 | [text 1](Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt) [text 2](Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt) |
 | bevy_platform 0.17.3 | MIT OR Apache-2.0 | [text 1](Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt) [text 2](Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt) |
+| bevy_post_process 0.17.3 | MIT OR Apache-2.0 | [text 1](Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt) [text 2](Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt) |
 | bevy_ptr 0.17.3 | MIT OR Apache-2.0 | [text 1](Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt) [text 2](Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt) |
 | bevy_reflect 0.17.3 | MIT OR Apache-2.0 | [text 1](Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt) [text 2](Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt) |
 | bevy_reflect_derive 0.17.3 | MIT OR Apache-2.0 | [text 1](Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt) [text 2](Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt) |

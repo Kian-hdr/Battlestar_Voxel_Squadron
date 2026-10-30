@@ -30,6 +30,38 @@ fn contains(p: Vec3, low: Vec3, high: Vec3) -> bool {
     p.cmpge(low).all() && p.cmple(high).all()
 }
 
+// Ordered x ranges avoid traversing the full hull for a short local sweep.
+// Keep an extra voxel of skin around the swept box for boundary roundoff. For
+// extreme finite coordinates, preserve the original exhaustive numeric behavior.
+fn candidate_cells(
+    voxels: &Voxels,
+    a: Vec3,
+    b: Vec3,
+    offset_min: Vec3,
+    offset_max: Vec3,
+) -> impl Iterator<Item = &[i32; 3]> {
+    let magnitude = a
+        .abs()
+        .max(b.abs())
+        .max(offset_min.abs())
+        .max(offset_max.abs());
+    let (low, high) = if magnitude.max_element() < 10_000. {
+        let low = (a.min(b) + offset_min) / UNIT;
+        let high = (a.max(b) + offset_max) / UNIT;
+        (
+            low.to_array().map(|v| (v.floor() as i32).saturating_sub(1)),
+            high.to_array().map(|v| (v.ceil() as i32).saturating_add(1)),
+        )
+    } else {
+        ([i32::MIN; 3], [i32::MAX; 3])
+    };
+    voxels
+        .0
+        .range([low[0], i32::MIN, i32::MIN]..=[high[0], i32::MAX, i32::MAX])
+        .map(|(p, _)| p)
+        .filter(move |p| p[1] >= low[1] && p[1] <= high[1] && p[2] >= low[2] && p[2] <= high[2])
+}
+
 /// Sweep a conservative debris box against the target's actual occupied boxes.
 /// Debris bounds are relative to its pivot. Both pivot endpoints are world-space;
 /// target velocity is integrated across `dt`. Rotations remain fixed in the step.
@@ -106,7 +138,7 @@ pub fn sweep_chunk(
     // All slab normals are single local axes. Their inverse-transpose transform
     // only needs the scale sign, avoiding underflow for very large valid scales.
     let world_normal = |normal: Vec3| target_rotation * (normal * target.scale.signum());
-    let overlaps = target.voxels.0.keys().any(|p| {
+    let overlaps = candidate_cells(target.voxels, a, a, offset_min, offset_max).any(|p| {
         let (low, high) = expanded(*p, offset_min, offset_max);
         contains(a, low, high)
     });
@@ -163,7 +195,7 @@ pub fn sweep_chunk(
     }
     let mut closest = f32::INFINITY;
     let mut normal = Vec3::ZERO;
-    for p in target.voxels.0.keys() {
+    for p in candidate_cells(target.voxels, a, b, offset_min, offset_max) {
         let (low, high) = expanded(*p, offset_min, offset_max);
         let mut enter = 0_f32;
         let mut exit = 1_f32;

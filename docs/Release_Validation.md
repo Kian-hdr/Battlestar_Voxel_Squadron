@@ -1,3 +1,17 @@
+# Desktop release validation · v0.4.1
+
+macOS bundle build14. Local verification completed30-Oct-2026 on Apple M5 / macOS27.2. Native Windows/Linux package jobs are recorded below after completion.
+
+- 71 regression tests pass, including2,000 exact collision comparisons against the previous algorithm, viewport-edge/shadow tests and exhaust/hull separation. Formatting and all-target release Clippy pass.
+- Full silent native scenario passes both eras, debris contacts/cooling/subdivision, pause, restart, death, resize and normal runner shutdown. Player visibility is checked on every gameplay frame, including respawn protection.
+- Debris now retires only when its full bounding sphere leaves the camera view. The scenario retained pieces beyond the old1.05-second timeout and retired2,130 pieces offscreen; peak1,934 cells across9 concurrent events. Spatial shadow keeps opaque geometry legible. Restart explicitly clears the old run.
+- With emissive exhaust/projectiles, restrained HDR bloom and red impact lighting enabled,1,021 physical1920×1080 frames average8.333ms, p958.783ms (about120FPS). The full scenario averages9.69ms with p9513.82ms. Results are specific to this Mac and scripted workload.
+- A focused CPU microbenchmark of1,024 short Galactica collision sweeps improved72.06ms to3.21ms (22.44×); this is not a whole-game FPS multiplier.
+
+The old build reproduced severe stalls in a separate scripted sample (56.934ms mean /203.704ms p95). Focus/workload and timing-instrumentation differences limit a direct causal FPS ratio: the new build retains more debris and records uncapped real time, while the old telemetry used capped virtual time. The collision benchmark compares identical inputs with exact output equivalence. The final native test includes the new HDR lighting cost.
+
+License inventory now covers389 pinned packages with zero missing notices; existing provenance limits below remain. Native Windows/Linux graphical gameplay and other-device performance remain untested. Owner aesthetic acceptance is separate from these checks.
+
 # Desktop release validation · v0.4.0
 
 Source commit: `16e1f28e52689f0d0cacaf3e3a95a32b1beec001`, tag `v0.4.0`. macOS bundle build 13. This document records checks, not owner aesthetic approval or universal device compatibility.

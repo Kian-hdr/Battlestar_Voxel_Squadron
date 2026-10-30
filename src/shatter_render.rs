@@ -13,8 +13,6 @@ use bevy::{
     prelude::*,
 };
 
-pub(super) const WORLD_BUDGET: usize = 4096;
-pub(super) const MAX_EFFECTS: usize = 3;
 #[derive(Clone)]
 pub(super) struct Request {
     pub id: u64,
@@ -99,7 +97,6 @@ struct Active {
     bodies: Vec<Body>,
     cubes: usize,
     age: f32,
-    life: f32,
     origin: Vec3,
 }
 #[derive(Resource, Default)]
@@ -118,6 +115,8 @@ pub(super) struct ShatterEffects {
     pub peak_hot_vertices: usize,
     pub bounces: u32,
     pub peak_speed: f32,
+    pub offscreen_retired: usize,
+    pub retained_after_timeout: usize,
     last_bounce: Option<(Vec3, f32)>,
 }
 impl ShatterEffects {
@@ -213,11 +212,12 @@ fn draw(effect: &Active, meshes: &mut Assets<Mesh>) -> usize {
             let normal = (body.rotation * Vec3::from_array(body.surface.normals[start])).to_array();
             let heat = body.face_heat[face] * cooling;
             let original = body.surface.colors[start];
-            let color = if heat > 0. {
+            let mut color = if heat > 0. {
                 thermal_tint(original, heat)
             } else {
                 original
             };
+            color = battlestar_voxel::viewport::debris_shadow_tint(color, body.position.z);
             let posed: [[f32; 3]; 4] = std::array::from_fn(|corner| {
                 let p = quad[corner];
                 (body.position + body.rotation * (Vec3::from_array(p) - pivot)).to_array()
@@ -436,6 +436,8 @@ pub(super) fn update(
     time: Res<Time<Fixed>>,
     session: Res<Session>,
     galactica: Single<&Transform, With<super::Galactica>>,
+    camera: Single<(&Transform, &Projection), With<Camera3d>>,
+    window: Single<&Window>,
     mut queue: ResMut<ShatterQueue>,
     mut state: ResMut<ShatterEffects>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -467,28 +469,38 @@ pub(super) fn update(
         }));
     }
     let dt = time.delta_secs();
+    let (camera_transform, projection) = *camera;
+    let Projection::Perspective(p) = projection else {
+        return;
+    };
+    let aspect = window.physical_width() as f32 / window.physical_height().max(1) as f32;
+    let clip = Mat4::perspective_rh(
+        battlestar_voxel::viewport::battle_fov(aspect),
+        aspect,
+        p.near,
+        p.far,
+    ) * camera_transform.to_matrix().inverse();
     let targets = targets(&session, &galactica, dt);
     let mut bounces = 0;
     let mut peak_speed = 0_f32;
     let mut last_bounce = None;
     let mut split_count = 0;
     let mut cooling_seen = false;
+    let mut retired = 0;
+    let mut retained = 0;
     let mut i = 0;
     while i < state.active.len() {
         let effect = &mut state.active[i];
         let previous_age = effect.age;
         effect.age += dt;
-        if effect.age >= effect.life {
-            let e = state.active.remove(i);
-            retire(&mut commands, &mut meshes, e);
-            continue;
-        }
         let mut children = Vec::new();
         let mut j = 0;
         while j < effect.bodies.len() {
             let b = &mut effect.bodies[j];
             let flight_dt = (effect.age - b.release).max(0.) - (previous_age - b.release).max(0.);
             if flight_dt > 0. {
+                // Recede gently while retaining the opaque, cooling hull.
+                b.velocity.z -= 2.5 * flight_dt;
                 let contacts = move_body(b, flight_dt, dt - flight_dt, &targets);
                 bounces += contacts;
                 if contacts > 0 {
@@ -533,11 +545,27 @@ pub(super) fn update(
             }
         }
         effect.bodies.extend(children);
+        let before = effect.bodies.len();
+        effect
+            .bodies
+            .retain(|b| battlestar_voxel::viewport::sphere_visible(clip, b.position, b.radius));
+        retired += before - effect.bodies.len();
+        effect.cubes = effect.bodies.iter().map(|b| b.chunk.cells.0.len()).sum();
+        if effect.bodies.is_empty() {
+            let e = state.active.remove(i);
+            retire(&mut commands, &mut meshes, e);
+            continue;
+        }
+        if effect.age > 1.05 {
+            retained += effect.bodies.len();
+        }
         if effect.age > 0.75 && effect.bodies.iter().any(|b| !b.chunk.heat.is_empty()) {
             cooling_seen = true;
         }
         i += 1;
     }
+    state.offscreen_retired += retired;
+    state.retained_after_timeout += retained;
     if last_bounce.is_some() {
         state.last_bounce = last_bounce;
     }
@@ -579,12 +607,6 @@ pub(super) fn update(
             continue;
         }
         debug_assert_eq!(cubes, model.0.len());
-        while (state.active_cubes() + cubes > WORLD_BUDGET || state.active.len() >= MAX_EFFECTS)
-            && !state.active.is_empty()
-        {
-            let e = state.active.remove(0);
-            retire(&mut commands, &mut meshes, e);
-        }
         let origin = Vec3::new(request.pos.x, request.pos.y, request.depth);
         let mut bodies = Vec::with_capacity(chunks.len());
         for (k, chunk) in chunks.into_iter().enumerate() {
@@ -639,7 +661,6 @@ pub(super) fn update(
             bodies,
             cubes,
             age: 0.,
-            life: 1.05,
             origin,
         });
         state.bursts += 1;

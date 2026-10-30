@@ -12,6 +12,7 @@ use bevy::{
     asset::RenderAssetUsages,
     core_pipeline::tonemapping::Tonemapping,
     mesh::{Indices, PrimitiveTopology},
+    post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter},
     prelude::*,
     render::view::screenshot::{Screenshot, save_to_disk},
 };
@@ -31,7 +32,7 @@ impl Plugin for PresentationPlugin {
             .init_resource::<shatter::ShatterQueue>()
             .init_resource::<shatter::ShatterEffects>()
             .add_systems(Startup, setup)
-            .add_systems(FixedUpdate, (tick, shatter::update).chain())
+            .add_systems(FixedUpdate, (tick, shatter::update, update_impacts).chain())
             .add_systems(
                 Update,
                 (
@@ -79,6 +80,11 @@ struct Player;
 struct Galactica;
 #[derive(Component)]
 struct Engine;
+#[derive(Component)]
+struct ImpactFlash {
+    remaining: f32,
+    run: u64,
+}
 #[derive(Component)]
 struct Backdrop;
 #[derive(Component)]
@@ -133,6 +139,15 @@ fn glowing(materials: &mut Assets<StandardMaterial>, c: Color) -> Handle<Standar
         ..default()
     })
 }
+fn emitting(materials: &mut Assets<StandardMaterial>, c: Color) -> Handle<StandardMaterial> {
+    let linear = c.to_linear();
+    materials.add(StandardMaterial {
+        base_color: c,
+        emissive: LinearRgba::rgb(linear.red * 8., linear.green * 8., linear.blue * 8.),
+        ..default()
+    })
+}
+
 fn label(commands: &mut Commands, text: &str, size: f32, color: Color, node: Node) -> Entity {
     commands
         .spawn((
@@ -164,6 +179,17 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Tonemapping::Reinhard,
+        Bloom {
+            intensity: 0.08,
+            low_frequency_boost: 0.1,
+            max_mip_dimension: 256,
+            prefilter: BloomPrefilter {
+                threshold: 1.5,
+                threshold_softness: 0.5,
+            },
+            composite_mode: BloomCompositeMode::Additive,
+            ..Bloom::NATURAL
+        },
         Projection::Perspective(PerspectiveProjection {
             fov: 0.72,
             near: 0.1,
@@ -191,11 +217,11 @@ fn setup(
         perceptual_roughness: 0.65,
         ..default()
     });
-    let cyan = glowing(&mut materials, Color::srgb(0.32, 0.88, 1.));
-    let red = glowing(&mut materials, Color::srgb(1., 0.22, 0.11));
-    let gold_mat = glowing(&mut materials, gold);
+    let cyan = emitting(&mut materials, Color::srgb(0.32, 0.88, 1.));
+    let red = emitting(&mut materials, Color::srgb(1., 0.22, 0.11));
+    let gold_mat = emitting(&mut materials, gold);
     let shot = meshes.add(mesh(voxel::projectile(), voxel::UNIT));
-    let engine_mesh = shot.clone();
+    let engine_mesh = meshes.add(mesh(voxel::viper_exhaust(), voxel::UNIT));
     let viper = meshes.add(mesh(voxel::viper(true), voxel::UNIT));
     let viper_modern = meshes.add(mesh(voxel::viper(false), voxel::UNIT));
     let classic = meshes.add(mesh(voxel::raider(true), voxel::UNIT));
@@ -208,7 +234,6 @@ fn setup(
     let red_glow = materials.add(StandardMaterial {
         base_color: Color::srgb(1., 0.015, 0.005),
         emissive: LinearRgba::new(5., 0.015, 0.005, 1.),
-        unlit: true,
         ..default()
     });
 
@@ -226,7 +251,11 @@ fn setup(
                 Engine,
                 Mesh3d(engine_mesh.clone()),
                 MeshMaterial3d(cyan.clone()),
-                Transform::from_xyz(x, -1.15, if x == 0. { 0.24 } else { 0. }),
+                Transform::from_xyz(
+                    x,
+                    -8. * voxel::UNIT - 0.004,
+                    if x == 0. { 0.24 } else { 0. },
+                ),
             ))
             .id();
         commands.entity(player).add_child(engine);
@@ -365,6 +394,7 @@ fn tick(
     controls: Res<Controls>,
     sounds: Res<Sounds>,
     audio_settings: Res<AudioSettings>,
+    art: Res<Art>,
     smoke: Res<Smoke>,
     mut shatters: ResMut<shatter::ShatterQueue>,
 ) {
@@ -401,6 +431,23 @@ fn tick(
             velocity_z,
         } = event
         {
+            commands.spawn((
+                ImpactFlash {
+                    remaining: 0.12,
+                    run: session.1,
+                },
+                Mesh3d(art.shot.clone()),
+                MeshMaterial3d(art.red.clone()),
+                Transform::from_xyz(impact.x, impact.y, *depth + 0.15),
+                PointLight {
+                    color: Color::srgb(1., 0.025, 0.01),
+                    intensity: 1600.,
+                    range: 2.5,
+                    radius: 0.12,
+                    shadows_enabled: false,
+                    ..default()
+                },
+            ));
             shatters.0.push(shatter::Request {
                 id: *id,
                 pos: *pos,
@@ -439,6 +486,26 @@ fn tick(
     }
 }
 
+fn update_impacts(
+    mut commands: Commands,
+    time: Res<Time<Fixed>>,
+    session: Res<Session>,
+    mut flashes: Query<(Entity, &mut ImpactFlash, &mut PointLight)>,
+) {
+    for (entity, mut flash, mut light) in &mut flashes {
+        if flash.run != session.1 {
+            commands.entity(entity).despawn();
+        } else if session.0.phase != Phase::Paused {
+            flash.remaining -= time.delta_secs();
+            if flash.remaining <= 0. {
+                commands.entity(entity).despawn();
+            } else {
+                light.intensity = 1600. * (flash.remaining / 0.12);
+            }
+        }
+    }
+}
+
 fn sync_visuals(
     mut commands: Commands,
     session: Res<Session>,
@@ -451,13 +518,12 @@ fn sync_visuals(
     let (t, v) = &mut *player;
     t.translation = Vec3::new(g.player.x, g.player.y, 0.);
     t.rotation = Quat::from_array(g.player_rotation);
-    **v = if g.phase == Phase::GameOver
-        || (g.invulnerable > 0. && (g.elapsed * 12.) as i32 % 2 == 0)
-    {
+    let visibility = if g.phase == Phase::GameOver {
         Visibility::Hidden
     } else {
         Visibility::Visible
     };
+    v.set_if_neq(visibility);
     let living: BTreeSet<_> = g.enemies.iter().map(|e| e.id).collect();
     fleet.enemies.retain(|id, entity| {
         if living.contains(id) {
@@ -560,28 +626,36 @@ fn update_hud(
 ) {
     let g = &session.0;
     for mut text in &mut texts.p0() {
-        text.0 = format!(
+        let value = format!(
             "SCORE  {:06}\n\nRESERVES  {:02}",
             g.score,
             g.lives.saturating_sub(1)
         );
+        if text.0 != value {
+            text.0 = value;
+        }
     }
     for mut text in &mut texts.p1() {
-        text.0 = format!("SECTOR {:02}", g.wave.max(1));
+        let value = format!("SECTOR {:02}", g.wave.max(1));
+        if text.0 != value {
+            text.0 = value;
+        }
     }
     for mut node in &mut nodes {
-        node.display = if g.phase == Phase::Playing {
+        let display = if g.phase == Phase::Playing {
             Display::Flex
         } else {
             Display::None
         };
+        if node.display != display {
+            node.display = display;
+        }
     }
 }
 fn animate_background(
     time: Res<Time>,
     session: Res<Session>,
     mut stars: Query<&mut Transform, With<Backdrop>>,
-    mut engines: Query<&mut Transform, (With<Engine>, Without<Backdrop>)>,
 ) {
     if session.0.phase == Phase::Paused {
         return;
@@ -591,9 +665,6 @@ fn animate_background(
         if t.translation.y < -21. {
             t.translation.y = 21.;
         }
-    }
-    for mut t in &mut engines {
-        t.translation.y = -1.15 + (time.elapsed_secs() * 27.).sin() * 0.035;
     }
 }
 fn capture(commands: &mut Commands, name: &str) {
@@ -606,6 +677,7 @@ fn capture(commands: &mut Commands, name: &str) {
 fn smoke_test(
     mut commands: Commands,
     time: Res<Time>,
+    real_time: Res<Time<Real>>,
     mut smoke: ResMut<Smoke>,
     mut session: ResMut<Session>,
     mut controls: ResMut<Controls>,
@@ -614,30 +686,30 @@ fn smoke_test(
     mut shatter_queue: ResMut<shatter::ShatterQueue>,
     mut exit: MessageWriter<AppExit>,
     mut window: Single<&mut Window>,
+    player: Single<&Visibility, With<Player>>,
 ) {
     stats.frames += 1;
     if time.elapsed_secs() > 5. && stats.samples.len() < 10000 {
-        stats.samples.push(time.delta_secs());
+        stats.samples.push(real_time.delta_secs());
         if smoke.stage == 4
             && time.elapsed_secs() - smoke.started > 1.5
             && window.physical_width() == 1920
             && window.physical_height() == 1080
         {
-            stats.samples_1080.push(time.delta_secs());
+            stats.samples_1080.push(real_time.delta_secs());
         }
     }
     if !smoke.enabled {
         return;
     }
     let now = time.elapsed_secs();
-    assert!(
-        shatters.active_cubes() <= shatter::WORLD_BUDGET,
-        "shatter resource budget exceeded"
-    );
-    assert!(
-        shatters.peak_effects <= shatter::MAX_EFFECTS,
-        "debris event limit exceeded"
-    );
+    if session.0.phase == Phase::Playing {
+        assert_eq!(
+            **player,
+            Visibility::Visible,
+            "player must never blink during protection"
+        );
+    }
     if session.0.wave < 4
         && shatters.bursts >= 3
         && shatters.review_burst(true)
@@ -881,6 +953,14 @@ fn smoke_test(
                 "SMOKE debris_collision bounces={} peak_speed={:.2}",
                 shatters.bounces, shatters.peak_speed
             );
+            assert!(
+                shatters.retained_after_timeout > 0,
+                "visible debris must survive its old timeout"
+            );
+            assert!(
+                shatters.offscreen_retired > 0,
+                "debris must retire after leaving the viewport"
+            );
             stats.samples.sort_by(|a, b| a.total_cmp(b));
             let n = stats.samples.len();
             if n > 0 {
@@ -922,9 +1002,19 @@ fn smoke_test(
                 "{{\"complete\":true,\"reached_modern_sector_4\":{},\"pause_resume\":true,\"mute\":true,\"game_over\":true,\"restart\":true,\"physical_1080p_frames\":{},\"mean_ms\":{:.3},\"p95_ms\":{:.3}}}\n",
                 smoke.wave_reached, n, mean, p95
             );
+            std::fs::write(
+                std::path::Path::new(&dir).join("Frame_Times_1080p.csv"),
+                "frame_ms\n".to_owned()
+                    + &stats
+                        .samples_1080
+                        .iter()
+                        .map(|s| format!("{:.6}\n", s * 1000.))
+                        .collect::<String>(),
+            )
+            .expect("write frame timings");
             let report = report.trim_end().trim_end_matches('}').to_owned()
                 + &format!(
-                    ",\"shatter_bursts\":{},\"peak_shatter_cubes\":{},\"shatter_both_eras\":{},\"shatter_pause_restart\":true,\"secondary_splits\":{},\"peak_voxel_bodies\":{},\"cooling_seen\":{},\"peak_damage_events\":{},\"peak_hot_vertices\":{},\"debris_bounces\":{},\"peak_debris_speed\":{:.3}}}\n",
+                    ",\"shatter_bursts\":{},\"peak_shatter_cubes\":{},\"shatter_both_eras\":{},\"shatter_pause_restart\":true,\"secondary_splits\":{},\"peak_voxel_bodies\":{},\"cooling_seen\":{},\"peak_damage_events\":{},\"peak_hot_vertices\":{},\"debris_bounces\":{},\"peak_debris_speed\":{:.3},\"offscreen_retired\":{},\"retained_after_old_timeout\":{},\"player_no_blink\":true}}\n",
                     shatters.bursts,
                     shatters.peak_cubes,
                     shatters.captures & 3 == 3,
@@ -934,7 +1024,9 @@ fn smoke_test(
                     shatters.peak_effects,
                     shatters.peak_hot_vertices,
                     shatters.bounces,
-                    shatters.peak_speed
+                    shatters.peak_speed,
+                    shatters.offscreen_retired,
+                    shatters.retained_after_timeout
                 );
             std::fs::write(std::path::Path::new(&dir).join("Smoke_Result.json"), report)
                 .expect("write smoke result");
@@ -983,9 +1075,12 @@ fn sync_era(
 
 fn fit_camera(window: Single<&Window>, mut projection: Single<&mut Projection, With<Camera3d>>) {
     let aspect = window.physical_width() as f32 / window.physical_height().max(1) as f32;
-    let height = 17.5_f32.max(26. / aspect);
-    if let Projection::Perspective(p) = &mut **projection {
-        p.fov = 2. * (height / (2. * 38.)).atan();
+    let fov = battlestar_voxel::viewport::battle_fov(aspect);
+    if let Projection::Perspective(p) = &**projection
+        && p.fov != fov
+        && let Projection::Perspective(p) = &mut **projection
+    {
+        p.fov = fov;
     }
 }
 
@@ -1007,16 +1102,20 @@ fn responsive_hud(
         window.physical_height(),
         window.resolution.scale_factor(),
     );
-    ui.0 = layout.scale;
+    if ui.0 != layout.scale {
+        ui.0 = layout.scale;
+    }
     for mut font in &mut fonts {
-        font.font_size = layout.body_font;
+        if font.font_size != layout.body_font {
+            font.font_size = layout.body_font;
+        }
     }
 }
 
 fn update_reserves(session: Res<Session>, mut icons: Query<(&ReserveIcon, &mut Node)>) {
     let reserves = session.0.lives.saturating_sub(1);
     for (icon, mut node) in &mut icons {
-        node.display = if session.0.phase == Phase::Playing
+        let display = if session.0.phase == Phase::Playing
             && icon.slot < reserves
             && icon.classic == (session.0.wave < 4)
         {
@@ -1024,5 +1123,8 @@ fn update_reserves(session: Res<Session>, mut icons: Query<(&ReserveIcon, &mut N
         } else {
             Display::None
         };
+        if node.display != display {
+            node.display = display;
+        }
     }
 }

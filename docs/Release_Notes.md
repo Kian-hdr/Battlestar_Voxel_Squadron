@@ -1,3 +1,16 @@
+# v0.4.1 · Performance and visual continuity
+
+- Faster debris collision searches preserve the exact occupied-voxel contact rules.
+- HUD, fonts and camera settings update only when their values change, avoiding repeated layout work during combat.
+- The Viper stays visible during startup and respawn protection. Protection itself is unchanged.
+- Connected debris remains until its complete bounding volume leaves the camera view. New destruction no longer deletes older visible pieces.
+- Debris gently recedes into a soft, cool spatial shadow, while remaining opaque. Pause freezes it, and restart clears the previous run.
+- Viper exhaust is anchored behind its nozzles, with no oscillation through engine voxels.
+- Restrained emissive exhaust/projectile glow and brief, local red enemy-impact lighting. A single low-resolution bloom chain supplies the glow; projectiles do not spawn point lights.
+- Camera-edge checks follow the current window aspect ratio, including resizing.
+
+See [release validation](Release_Validation.md) for measured scope and platform coverage. The macOS package remains Apple Silicon; Windows and Linux packages remain x64.
+
 # v0.4.0 · Public playable preview
 
 Battlestar: Voxel Squadron is a native Rust voxel arcade fan game by Kian Konrad Tajbakhsh.

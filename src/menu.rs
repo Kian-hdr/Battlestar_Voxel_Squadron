@@ -426,11 +426,11 @@ pub(super) fn update(
 ) {
     let visible = session.0.phase != Phase::Playing;
     for mut root in &mut roots {
-        *root = if visible {
+        root.set_if_neq(if visible {
             Visibility::Visible
         } else {
             Visibility::Hidden
-        };
+        });
     }
     if !visible {
         return;

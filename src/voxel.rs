@@ -482,6 +482,14 @@ pub fn galactica(classic: bool) -> Voxels {
     v.panel_detail(if classic { 8 } else { 7 }, plate);
     v.game_grid().lateral_symmetry()
 }
+/// Exhaust extends only aft of its fixed nozzle anchor, avoiding intersecting
+/// hull faces or oscillating through engine voxels.
+pub fn viper_exhaust() -> Voxels {
+    let mut v = Voxels::default();
+    v.block([0, -4, 0], [0, -1, 0], [1.; 4]);
+    v
+}
+
 pub fn projectile() -> Voxels {
     let mut v = Voxels::default();
     for y in -2..=2 {
@@ -492,6 +500,23 @@ pub fn projectile() -> Voxels {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn exhaust_stays_behind_both_viper_hulls() {
+        let exhaust = viper_exhaust().mesh(UNIT);
+        let exhaust_front = exhaust
+            .positions
+            .iter()
+            .map(|p| p[1])
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert_eq!(exhaust_front, 0.);
+        for classic in [true, false] {
+            let hull = viper(classic);
+            let rear = hull.0.keys().map(|p| p[1]).min().unwrap() as f32 * UNIT;
+            assert_eq!(rear, -8. * UNIT);
+            assert!(exhaust_front + (-8. * UNIT - 0.004) < rear);
+        }
+    }
+
     #[test]
     fn hides_internal_faces() {
         let mut v = Voxels::default();

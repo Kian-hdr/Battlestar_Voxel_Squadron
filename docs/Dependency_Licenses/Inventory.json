@@ -6,7 +6,7 @@
     "x86_64-pc-windows-msvc",
     "x86_64-unknown-linux-gnu"
   ],
-  "cargo_lock_sha256": "96f019038a9c7ae5c58593e573a92b56015864cce09821535f12be1cd51038da",
+  "cargo_lock_sha256": "eb5ea35576a8bbec910e1c12f9c019d8e5d12e032199986b9dc1bc0731ea4f64",
   "missing_notices": [],
   "packages": [
     {
@@ -1370,6 +1370,30 @@
           "file": "Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt",
           "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
           "origin": "crate:bevy_platform@0.17.3/LICENSE-MIT"
+        }
+      ]
+    },
+    {
+      "standard_text_supplement": false,
+      "name": "bevy_post_process",
+      "version": "0.17.3",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/bevyengine/bevy",
+      "targets": [
+        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "notices": [
+        {
+          "file": "Texts/a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9.txt",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "origin": "crate:bevy_post_process@0.17.3/LICENSE-APACHE"
+        },
+        {
+          "file": "Texts/508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1.txt",
+          "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1",
+          "origin": "crate:bevy_post_process@0.17.3/LICENSE-MIT"
         }
       ]
     },
