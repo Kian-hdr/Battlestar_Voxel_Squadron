@@ -6,7 +6,7 @@
     "x86_64-pc-windows-msvc",
     "x86_64-unknown-linux-gnu"
   ],
-  "cargo_lock_sha256": "6ea60942be6ce43ddd1bbb2e15f79030fc2031ce93bcfe4edfcb14032b719a0e",
+  "cargo_lock_sha256": "816c4dd77672141569eac9631395d1353b8d2beae681c493960eafe34959985e",
   "missing_notices": [],
   "packages": [
     {

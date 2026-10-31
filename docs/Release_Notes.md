@@ -1,3 +1,12 @@
+# v0.4.3 · Voxel exhaust and straight-flight debris
+
+- Exhaust is now made from separate, fixed-size glowing cubes, with a steady voxel core and an irregular tapered stream. No smooth cone skin or static rods.
+- Debris launches faster with impact and hull momentum, then follows a straight constant-velocity path while unobstructed. Removed continuous background steering and delayed subdivision kicks.
+- Split fragments inherit parent translation and spin. Genuine hull contacts keep bounded deflections/escape slides; visible geometry still retires only outside the viewport and darkens in deep-space shadow.
+- The shot-depth/color fixes, stable Viper, menu Quit Game and existing audio mix are retained.
+
+See [release validation](Release_Validation.md) for actual measurements and platform coverage.
+
 # v0.4.2 · Combat alignment and natural exhaust/debris
 
 - Fixed depth targeting when enemies enter the firing lane after a shot has launched; stale locks are released and replaced. Horizontal aiming remains player-controlled, and exact occupied-voxel contact still determines hits.

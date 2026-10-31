@@ -29,10 +29,174 @@ pub fn sphere_visible(clip_from_world: Mat4, center: Vec3, radius: f32) -> bool 
     .all(|p| p.dot(center.extend(1.)) >= -radius * p.truncate().length())
 }
 
-/// Move into camera depth with a gentle downward escape from the view.
-/// Fragments become smaller in perspective; there is no lifetime cap.
-pub fn background_drift(forward: Vec3, up: Vec3, fov: f32) -> Vec3 {
-    forward * 8. - up * (8. * (fov * 0.5).tan() + 1.)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DebrisMotion {
+    pub position: Vec3,
+    pub velocity: Vec3,
+}
+
+/// No force, steering, damping or delayed relaunch acts on unobstructed debris.
+pub fn advance_debris(motion: DebrisMotion, dt: f32) -> DebrisMotion {
+    DebrisMotion {
+        position: motion.position + motion.velocity * dt,
+        ..motion
+    }
+}
+
+/// Subdivision changes the piece's pivot, never its translational momentum.
+pub fn split_debris_motion(
+    parent: DebrisMotion,
+    rotation: Quat,
+    local_offset: Vec3,
+) -> DebrisMotion {
+    DebrisMotion {
+        position: parent.position + rotation * local_offset,
+        velocity: parent.velocity,
+    }
+}
+
+/// Choose the impact/hull impulse once. Any escape-cone correction also happens
+/// here, at launch, so the resulting flight remains ballistic until a collision.
+pub fn launch_debris_velocity(
+    impact_velocity: Vec3,
+    hull_velocity: Vec3,
+    spread_velocity: Vec3,
+    speed: f32,
+    forward: Vec3,
+    escape_tangent: f32,
+) -> Vec3 {
+    let forward = forward.normalize_or_zero();
+    let raw = impact_velocity.normalize_or_zero() * speed + hull_velocity * 0.35 + spread_velocity;
+    let velocity = receding_velocity(raw, forward, 8.);
+    let depth = velocity.dot(forward);
+    let lateral = velocity - forward * depth;
+    let direction = if lateral.length_squared() > 1e-8 {
+        lateral.normalize()
+    } else {
+        camera_plane_fallback(forward)
+    };
+    let lateral = direction
+        * lateral
+            .length()
+            .max(depth * (escape_tangent.max(0.) + 0.35));
+    (forward * depth + lateral).normalize_or_zero()
+        * velocity.length().clamp(26., DEBRIS_SPEED_LIMIT)
+}
+
+fn camera_plane_fallback(forward: Vec3) -> Vec3 {
+    let axis = if forward.x.abs() < 0.8 {
+        Vec3::X
+    } else {
+        Vec3::Y
+    };
+    forward.cross(axis).normalize_or_zero()
+}
+
+fn departing_velocity(velocity: Vec3, forward: Vec3, escape_tangent: f32) -> bool {
+    let depth = velocity.dot(forward);
+    let lateral = velocity - forward * depth;
+    velocity.length_squared() >= 1.
+        && depth >= -1e-5
+        && lateral.length() > depth.max(0.) * (escape_tangent.max(0.) + 0.02)
+}
+
+/// A genuine contact may choose a new departure once. Prefer the ordinary
+/// bounded material deflection; if it would stall inside the camera cone,
+/// choose a bounded slide in the camera/hull tangent instead. No later force
+/// is needed to restart the fragment.
+pub fn contact_departure_velocity(
+    velocity: Vec3,
+    target_velocity: Vec3,
+    normal: Vec3,
+    forward: Vec3,
+    escape_tangent: f32,
+) -> Vec3 {
+    let forward = forward.normalize_or_zero();
+    let normal = normal.normalize_or_zero();
+    let ordinary = receding_contact_velocity(velocity, target_velocity, normal, forward);
+    if departing_velocity(ordinary, forward, escape_tangent) {
+        return ordinary;
+    }
+    let required = target_velocity.dot(normal);
+    let tangent_normal = normal - forward * normal.dot(forward);
+    let speed = velocity
+        .length()
+        .max(target_velocity.length())
+        .clamp(8., DEBRIS_SPEED_LIMIT);
+    let alignment = normal.dot(forward);
+    if required > 0. && alignment > 1e-5 {
+        // A rear hull moving into the background needs a positive depth speed;
+        // a camera-plane-only slide would stall against it every frame.
+        let depth = required / alignment;
+        let slope = escape_tangent.max(0.) + 0.15;
+        let departure_speed = speed.max(depth * (1. + slope * slope).sqrt());
+        if departure_speed <= DEBRIS_SPEED_LIMIT {
+            let cross = forward.cross(normal);
+            let line = if cross.length_squared() > 1e-12 {
+                let line = cross.normalize();
+                let along = velocity.dot(line);
+                let sign = if along.abs() > 1e-5 {
+                    along.signum()
+                } else if camera_plane_fallback(forward).dot(line) < 0. {
+                    -1.
+                } else {
+                    1.
+                };
+                line * sign
+            } else {
+                camera_plane_fallback(forward)
+            };
+            let lateral = (departure_speed * departure_speed - depth * depth)
+                .max(0.)
+                .sqrt();
+            let mut departure = forward * depth + line * lateral;
+            let deficit = required - departure.dot(normal);
+            if deficit > 0. {
+                departure += forward * (deficit / alignment);
+            }
+            if departure.length_squared() <= DEBRIS_SPEED_LIMIT * DEBRIS_SPEED_LIMIT + 1e-4 {
+                return departure.clamp_length_max(DEBRIS_SPEED_LIMIT);
+            }
+        }
+    }
+    if tangent_normal.length_squared() > 1e-6 {
+        let base = tangent_normal * (required.max(0.) / tangent_normal.length_squared());
+        if base.length_squared() <= DEBRIS_SPEED_LIMIT * DEBRIS_SPEED_LIMIT {
+            let speed = speed.max(base.length());
+            let line = forward.cross(normal).normalize_or_zero();
+            let along = velocity.dot(line);
+            let sign = if along.abs() > 1e-5 {
+                along.signum()
+            } else if camera_plane_fallback(forward).dot(line) < 0. {
+                -1.
+            } else {
+                1.
+            };
+            let room = (speed * speed - base.length_squared()).max(0.).sqrt();
+            let slide = base + line * (sign * room);
+            if slide.length_squared() >= 1. {
+                return receding_velocity(slide, forward, 0.);
+            }
+        }
+    } else if required <= 0. {
+        let lateral = velocity - forward * velocity.dot(forward);
+        let direction = if lateral.length_squared() > 1e-8 {
+            lateral.normalize()
+        } else {
+            camera_plane_fallback(forward)
+        };
+        return direction * speed;
+    }
+    // A moving frontal hull can make a bounded camera-away response impossible.
+    // Retain a nonzero escape for the next step, but the caller must hold its
+    // current safe contact rather than advance an inward material trajectory.
+    let lateral = velocity - forward * velocity.dot(forward);
+    let direction = if lateral.length_squared() > 1e-8 {
+        lateral.normalize()
+    } else {
+        camera_plane_fallback(forward)
+    };
+    direction * speed
 }
 
 pub const DEBRIS_SPEED_LIMIT: f32 = 36.;
@@ -243,43 +407,164 @@ mod tests {
         assert!(!sphere_visible(clip, Vec3::new(0., 0., -102.), 1.));
     }
     #[test]
-    fn infinite_camera_keeps_distant_visible_debris_and_drift_clears_tall_views() {
-        for aspect in [0.4, 1.6, 3.] {
+    fn unobstructed_debris_keeps_velocity_and_a_collinear_path() {
+        let start = DebrisMotion {
+            position: Vec3::new(1., 2., -30.),
+            velocity: Vec3::new(3., 22., -10.),
+        };
+        let mut motion = start;
+        for _ in 0..16 {
+            motion = advance_debris(motion, 0.125);
+        }
+        assert_eq!(
+            motion.velocity, start.velocity,
+            "an unforced fragment must not turn or accelerate during flight"
+        );
+        assert!((motion.position - Vec3::new(7., 46., -50.)).length() < 1e-5);
+    }
+
+    #[test]
+    fn secondary_fracture_preserves_translation_without_a_delayed_impulse() {
+        let parent = DebrisMotion {
+            position: Vec3::new(1., 2., -30.),
+            velocity: Vec3::new(3., 22., -10.),
+        };
+        let child = split_debris_motion(
+            parent,
+            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            Vec3::X,
+        );
+        assert_eq!(
+            child.velocity, parent.velocity,
+            "subdivision must not redirect the child's translation"
+        );
+        assert!((child.position - Vec3::new(1., 3., -30.)).length() < 1e-5);
+    }
+
+    #[test]
+    fn fast_ballistic_launch_recedes_and_leaves_tall_and_wide_views_without_steering() {
+        let camera_position = Vec3::new(0., -25., 28.);
+        let camera_forward = (Vec3::new(0., -1.5, 0.) - camera_position).normalize();
+        for aspect in [0.4_f32, 1.6, 3.] {
             let fov = battle_fov(aspect);
-            let clip = Mat4::perspective_infinite_reverse_rh(fov, aspect, 0.1);
-            assert!(sphere_visible(clip, Vec3::new(0., 0., -10000.), 1.));
-            let drift = background_drift(-Vec3::Z, Vec3::Y, fov);
-            assert!(-drift.y > -drift.z * (fov * 0.5).tan());
-            let mut p = Vec3::new(0., 0., -10.);
-            let mut v = Vec3::ZERO;
-            for _ in 0..2400 {
-                v += drift / 120.;
-                p += v / 120.;
+            let escape_tangent = (fov * 0.5).tan() * (1. + aspect * aspect).sqrt();
+            let view = Mat4::look_at_rh(camera_position, Vec3::new(0., -1.5, 0.), Vec3::Y);
+            let clip = Mat4::perspective_infinite_reverse_rh(fov, aspect, 0.1) * view;
+            for impact in [Vec3::Y, -Vec3::Y, camera_forward, Vec3::ZERO] {
+                for hull in [Vec3::new(2., -5., 0.), Vec3::ZERO] {
+                    for spread in [Vec3::X * 0.5, Vec3::ZERO] {
+                        let velocity = launch_debris_velocity(
+                            impact,
+                            hull,
+                            spread,
+                            29.,
+                            camera_forward,
+                            escape_tangent,
+                        );
+                        assert!(velocity.dot(camera_forward) > 0.);
+                        assert!((26. - 1e-4..=36.0001).contains(&velocity.length()));
+                        let mut motion = DebrisMotion {
+                            position: Vec3::ZERO,
+                            velocity,
+                        };
+                        let mut exited = false;
+                        for _ in 0..720 {
+                            let previous = motion;
+                            motion = advance_debris(motion, 1. / 120.);
+                            assert_eq!(motion.velocity, velocity);
+                            assert!(
+                                (motion.position - previous.position).dot(camera_forward) >= -1e-5
+                            );
+                            if !sphere_visible(clip, motion.position, 1.) {
+                                exited = true;
+                                break;
+                            }
+                        }
+                        assert!(
+                            exited,
+                            "launch should clear the view in under six seconds without a later force: aspect={aspect} impact={impact:?} hull={hull:?} spread={spread:?}"
+                        );
+                    }
+                }
             }
-            assert!(
-                !sphere_visible(clip, p, 1.),
-                "drift must clear the view without age removal"
-            );
         }
     }
 
     #[test]
-    fn background_force_moves_debris_into_depth_and_down_not_up_to_camera() {
-        let forward = (Vec3::new(0., -1.5, 0.) - Vec3::new(0., -25., 28.)).normalize();
-        let right = forward.cross(Vec3::Y).normalize();
-        let up = right.cross(forward);
-        let drift = background_drift(forward, up, battle_fov(1.6));
+    fn ordinary_impacts_clear_the_combat_view_quickly_at_constant_velocity() {
+        let camera = Vec3::new(0., -25., 28.);
+        let forward = (Vec3::new(0., -1.5, 0.) - camera).normalize();
+        let fov = battle_fov(1.6);
+        let tangent = (fov * 0.5).tan() * (1. + 1.6_f32.powi(2)).sqrt();
+        let clip = Mat4::perspective_infinite_reverse_rh(fov, 1.6, 0.1)
+            * Mat4::look_at_rh(camera, Vec3::new(0., -1.5, 0.), Vec3::Y);
+        for y in [-6., 0., 5.] {
+            for impact in [Vec3::Y, -Vec3::Y] {
+                let velocity = launch_debris_velocity(
+                    impact,
+                    Vec3::new(2., -5., 0.),
+                    Vec3::ZERO,
+                    29.,
+                    forward,
+                    tangent,
+                );
+                let mut motion = DebrisMotion {
+                    position: Vec3::new(0., y, 0.),
+                    velocity,
+                };
+                let mut exited = false;
+                for _ in 0..144 {
+                    motion = advance_debris(motion, 1. / 120.);
+                    if !sphere_visible(clip, motion.position, 1.5) {
+                        exited = true;
+                        break;
+                    }
+                }
+                assert!(
+                    exited,
+                    "ordinary unobstructed impacts should clear the current combat view within1.2s"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_moving_rear_hull_gets_a_material_safe_ballistic_departure() {
+        let forward = -Vec3::Z;
+        let target_velocity = forward * 10.;
+        let velocity =
+            contact_departure_velocity(forward * 10., target_velocity, forward, forward, 0.5);
+        assert!(departing_velocity(velocity, forward, 0.5));
         assert!(
-            drift.dot(forward) >= 6.,
-            "weak depth force leaves incoming/bounced fragments approaching"
+            (velocity - target_velocity).dot(forward) >= -1e-4,
+            "do not store an inward slide that repeatedly stalls against a moving rear hull"
         );
+        assert!(velocity.length() <= 36.0001);
+    }
+
+    #[test]
+    fn frontal_contact_selects_a_nonzero_one_time_departure_instead_of_a_later_relaunch() {
+        let forward = -Vec3::Z;
+        for normal in [Vec3::Z, -Vec3::Z, Vec3::X] {
+            let velocity =
+                contact_departure_velocity(forward * 28., Vec3::ZERO, normal, forward, 0.5);
+            assert!(departing_velocity(velocity, forward, 0.5));
+            assert!((velocity - Vec3::ZERO).dot(normal) >= -1e-4);
+            assert!(velocity.length() <= 36.0001);
+            let motion = DebrisMotion {
+                position: Vec3::new(0., 0., -30.),
+                velocity,
+            };
+            assert_eq!(advance_debris(motion, 0.5).velocity, velocity);
+        }
+        let normal = (Vec3::Z + Vec3::Y * 0.02).normalize();
+        let velocity =
+            contact_departure_velocity(Vec3::new(0., 2., 12.), Vec3::Z * 4., normal, forward, 0.5);
+        assert!(velocity.length() > 1. && velocity.length() <= 36.0001);
+        assert!(velocity.dot(forward) >= -1e-5);
         assert!(
-            drift.dot(up) < 0.,
-            "camera-up force produces the rising sheet rejected by the owner"
-        );
-        assert!(
-            drift.z < 0.,
-            "debris should fall behind the world combat plane"
+            (velocity - Vec3::Z * 4.).dot(normal) < -1e-4,
+            "an infeasible moving frontal constraint must still trigger the caller's safe-contact hold"
         );
     }
 
@@ -418,35 +703,6 @@ mod tests {
             response.x > 0. && response.y >= 29.999,
             "keep the feasible surface component and trim only excess tangent speed"
         );
-    }
-
-    #[test]
-    fn bounded_background_velocity_keeps_receding_and_eventually_clears_the_view() {
-        let forward = -Vec3::Z;
-        for aspect in [0.4, 1.6, 3.] {
-            let fov = battle_fov(aspect);
-            let clip = Mat4::perspective_infinite_reverse_rh(fov, aspect, 0.1);
-            let drift = background_drift(forward, Vec3::Y, fov);
-            for initial in [Vec3::ZERO, forward * 36., Vec3::new(100., 100., 100.)] {
-                let mut p = Vec3::new(0., 0., -30.);
-                let mut v = initial;
-                let mut exited = false;
-                for _ in 0..24000 {
-                    v = receding_velocity(v + drift / 120., forward, 8.);
-                    assert!(v.length() <= 36.0001);
-                    assert!(v.dot(forward) >= 7.9999);
-                    p += v / 120.;
-                    if !sphere_visible(clip, p, 1.) {
-                        exited = true;
-                        break;
-                    }
-                }
-                assert!(
-                    exited,
-                    "bounded speed must not collapse the escape drift into an endless forward-only path"
-                );
-            }
-        }
     }
 
     #[test]

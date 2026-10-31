@@ -1,3 +1,15 @@
+# Desktop release validation · v0.4.3
+
+Mac build 16, verified 31-Oct-2026. All 90 pure tests, formatting and release graphics Clippy pass locally. Exhaust topology regression fails on the old connected 20-vertex skin and passes for independent cube faces with one fixed edge length; no triangles connect different exhaust cubes. Visible cubes flow while cycling through dim endpoints; the nozzle core remains lit and behind both hulls.
+
+The complete native replay passes both eras, projectile colors, exhaust animation, collision/cooling/subdivision, pause/restart, resize, minimum-size menu and normal Quit Game shutdown. Across 152,405 unobstructed debris steps there were zero velocity/course changes and zero measured path error. All 219 split translation samples inherited velocity without impulse. Peak speed remains 36.000; no significant camera-approach steps occurred (maximum collision-skin correction 0.005633 world units, below the 0.01 diagnostic tolerance). Only actual hull contacts may change a trajectory.
+
+At physical 1920×1080, 1,020 frames averaged 8.342 ms / p95 8.783 ms (about 120 FPS) on Apple M5. Complete 5,451-frame scenario mean 8.37 ms / p95 8.78 ms. These are bounded measurements, not universal hardware guarantees. Faster departure follows launch momentum; no artificial late steering, timed in-view deletion or geometry scaling was introduced.
+
+Native Windows/Linux package jobs and final artifact receipts will be recorded after completion. Graphical gameplay on those systems remains untested. Existing private incorporated-audio, licensing and fan-rights boundaries remain applicable.
+
+## Historical v0.4.2 validation
+
 # Desktop release validation · v0.4.2
 
 Mac build 15, verified 31-Oct-2026. All 86 pure tests, formatting and release graphics Clippy pass locally. Native both-era/death/restart/pause/resize checks pass, with normal shutdown through the visible Quit Game menu interaction.

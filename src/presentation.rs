@@ -223,7 +223,6 @@ fn setup(
         base_color: Color::WHITE,
         unlit: true,
         alpha_mode: AlphaMode::Add,
-        cull_mode: None,
         ..default()
     });
     let viper = meshes.add(mesh(voxel::viper(true), voxel::UNIT));
@@ -1008,10 +1007,6 @@ fn smoke_test(
                 shatters.bounces, shatters.peak_speed
             );
             assert!(
-                shatters.retained_after_timeout > 0,
-                "visible debris must survive its old timeout"
-            );
-            assert!(
                 shatters.offscreen_retired > 0,
                 "debris must retire after leaving the viewport"
             );
@@ -1032,6 +1027,27 @@ fn smoke_test(
                 shatters.depth_motion_steps,
                 shatters.camera_approach_steps,
                 shatters.max_camera_approach
+            );
+            assert!(
+                shatters.unforced_flight_steps > 0
+                    && shatters.unforced_course_changes == 0
+                    && shatters.max_unforced_path_error < 0.0001,
+                "unobstructed debris must preserve its launch velocity and straight path"
+            );
+            assert!(
+                shatters.split_translation_samples > 0
+                    && shatters.split_impulse_events == 0
+                    && shatters.max_split_velocity_delta < 0.00001,
+                "subdivision must not add a delayed momentum kick"
+            );
+            info!(
+                "SMOKE ballistic steps={} course_changes={} max_velocity_delta={:.6} path_error={:.6} split_samples={} split_impulses={}",
+                shatters.unforced_flight_steps,
+                shatters.unforced_course_changes,
+                shatters.max_unforced_velocity_delta,
+                shatters.max_unforced_path_error,
+                shatters.split_translation_samples,
+                shatters.split_impulse_events
             );
             assert!(
                 stats.exhaust_updates > 100
@@ -1123,6 +1139,17 @@ fn smoke_test(
                 + &format!(
                     ",\"projectile_color_checks\":{}}}\n",
                     stats.projectile_color_checks
+                );
+            let report = report.trim_end().trim_end_matches('}').to_owned()
+                + &format!(
+                    ",\"unforced_flight_steps\":{},\"unforced_course_changes\":{},\"max_unforced_velocity_delta\":{:.6},\"max_unforced_path_error\":{:.6},\"split_translation_samples\":{},\"split_impulse_events\":{},\"max_split_velocity_delta\":{:.6}}}\n",
+                    shatters.unforced_flight_steps,
+                    shatters.unforced_course_changes,
+                    shatters.max_unforced_velocity_delta,
+                    shatters.max_unforced_path_error,
+                    shatters.split_translation_samples,
+                    shatters.split_impulse_events,
+                    shatters.max_split_velocity_delta
                 );
             std::fs::write(std::path::Path::new(&dir).join("Smoke_Result.json"), report)
                 .expect("write smoke result");

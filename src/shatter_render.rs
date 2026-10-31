@@ -2,7 +2,10 @@
 use crate::Session;
 use battlestar_voxel::{
     simulation::{Phase, Point},
-    viewport::{background_overlap_exit, receding_contact_velocity, receding_velocity},
+    viewport::{
+        DebrisMotion, advance_debris, background_overlap_exit, contact_departure_velocity,
+        launch_debris_velocity, split_debris_motion,
+    },
     voxel::{self, Geometry, UNIT},
     voxel_collision::{Collider, deflect_velocity, sweep_chunk},
     voxel_damage::{self, VoxelChunk, cooled_heat, fracture, split_chunk, thermal_tint},
@@ -122,6 +125,13 @@ pub(super) struct ShatterEffects {
     pub camera_approach_steps: u32,
     pub max_camera_approach: f32,
     pub depth_motion_steps: u32,
+    pub unforced_flight_steps: u32,
+    pub unforced_course_changes: u32,
+    pub max_unforced_velocity_delta: f32,
+    pub max_unforced_path_error: f32,
+    pub split_translation_samples: u32,
+    pub split_impulse_events: u32,
+    pub max_split_velocity_delta: f32,
     last_bounce: Option<(Vec3, f32)>,
 }
 impl ShatterEffects {
@@ -138,8 +148,8 @@ impl ShatterEffects {
     pub fn review_cooling(&self, classic: bool) -> bool {
         self.active.iter().any(|e| {
             e.classic == classic
-                && e.age > 0.65
-                && e.age < 0.9
+                && cooled_heat(1., e.age) < 0.65
+                && cooled_heat(1., e.age) > 0.2
                 && e.origin.x.abs() < 8.
                 && e.origin.y > -6.
                 && e.origin.y < 5.
@@ -367,12 +377,22 @@ fn move_body(
     start_elapsed: f32,
     targets: &[Target],
     camera_forward: Vec3,
-) -> u32 {
+    escape_tangent: f32,
+) -> (u32, bool) {
     let mut remaining = dt;
     let mut elapsed = start_elapsed;
     let mut bounces = 0;
+    let mut had_contact = false;
     for _ in 0..2 {
-        let end = body.position + body.velocity * remaining;
+        let motion = advance_debris(
+            DebrisMotion {
+                position: body.position,
+                velocity: body.velocity,
+            },
+            remaining,
+        );
+        let end = motion.position;
+        body.velocity = motion.velocity;
         let mut earliest = None;
         for target in targets {
             let position = target.position + target.velocity * elapsed;
@@ -429,9 +449,10 @@ fn move_body(
             }
         }
         if let Some((contact, target_velocity, target_position)) = earliest {
+            had_contact = true;
             let old = body.velocity;
             body.position = contact.point + contact.normal * 0.004;
-            body.velocity = receding_contact_velocity(
+            body.velocity = contact_departure_velocity(
                 deflect_velocity(
                     old,
                     target_velocity,
@@ -442,6 +463,7 @@ fn move_body(
                 target_velocity,
                 contact.normal,
                 camera_forward,
+                escape_tangent,
             );
             if (body.velocity - old).length_squared() > 0.01 {
                 body.angular_velocity = (body.angular_velocity
@@ -469,7 +491,7 @@ fn move_body(
     // Leave at the last safe contact if more than two hits happen within one120Hz step.
     body.rotation =
         (Quat::from_scaled_axis(body.angular_velocity * dt) * body.rotation).normalize();
-    bounces
+    (bounces, had_contact)
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn update(
@@ -521,8 +543,9 @@ pub(super) fn update(
     let clip = Mat4::perspective_infinite_reverse_rh(fov, aspect, p.near)
         * camera_transform.to_matrix().inverse();
     let camera_forward = *camera_transform.forward();
-    let drift =
-        battlestar_voxel::viewport::background_drift(camera_forward, *camera_transform.up(), fov);
+    // A conservative corner cone makes a launch/contact departure clear the
+    // current view without any later acceleration or steering.
+    let escape_tangent = (fov * 0.5).tan() * (1. + aspect * aspect).sqrt();
     let targets = targets(&session, &galactica, dt);
     let mut bounces = 0;
     let mut peak_speed = 0_f32;
@@ -534,6 +557,13 @@ pub(super) fn update(
     let mut camera_approach_steps = 0;
     let mut max_camera_approach = 0_f32;
     let mut depth_motion_steps = 0;
+    let mut unforced_flight_steps = 0;
+    let mut unforced_course_changes = 0;
+    let mut max_unforced_velocity_delta = 0_f32;
+    let mut max_unforced_path_error = 0_f32;
+    let mut split_translation_samples = 0;
+    let mut split_impulse_events = 0;
+    let mut max_split_velocity_delta = 0_f32;
     let mut i = 0;
     while i < state.active.len() {
         let effect = &mut state.active[i];
@@ -546,10 +576,24 @@ pub(super) fn update(
             let flight_dt = (effect.age - b.release).max(0.) - (previous_age - b.release).max(0.);
             if flight_dt > 0. {
                 let previous_position = b.position;
-                // The visible hull always recedes, including fragments born from
-                // incoming fire or a contact reflection. Preserve its true size.
-                b.velocity = receding_velocity(b.velocity + drift * flight_dt, camera_forward, 8.);
-                let contacts = move_body(b, flight_dt, dt - flight_dt, &targets, camera_forward);
+                let previous_velocity = b.velocity;
+                let (contacts, had_contact) = move_body(
+                    b,
+                    flight_dt,
+                    dt - flight_dt,
+                    &targets,
+                    camera_forward,
+                    escape_tangent,
+                );
+                if !had_contact {
+                    unforced_flight_steps += 1;
+                    let delta = (b.velocity - previous_velocity).length();
+                    max_unforced_velocity_delta = max_unforced_velocity_delta.max(delta);
+                    unforced_course_changes += u32::from(delta > 1e-5);
+                    max_unforced_path_error = max_unforced_path_error.max(
+                        (b.position - (previous_position + previous_velocity * flight_dt)).length(),
+                    );
+                }
                 let approach = -(b.position - previous_position).dot(camera_forward);
                 max_camera_approach = max_camera_approach.max(approach);
                 camera_approach_steps += u32::from(approach > 0.01);
@@ -573,23 +617,28 @@ pub(super) fn update(
                     pieces.iter().map(|c| c.cells.0.len()).sum::<usize>(),
                     parent.chunk.cells.0.len()
                 );
-                for (k, chunk) in pieces.into_iter().enumerate() {
-                    let offset = parent.rotation
-                        * Vec3::from_array(std::array::from_fn(|axis| {
-                            chunk.pivot[axis] - parent.chunk.pivot[axis]
-                        }));
-                    let kick = offset.normalize_or_zero()
-                        * (0.4 + noise(seed.wrapping_add(k as u64)) * 0.6);
+                for chunk in pieces {
+                    let local_offset = Vec3::from_array(std::array::from_fn(|axis| {
+                        chunk.pivot[axis] - parent.chunk.pivot[axis]
+                    }));
+                    let motion = split_debris_motion(
+                        DebrisMotion {
+                            position: parent.position,
+                            velocity: parent.velocity,
+                        },
+                        parent.rotation,
+                        local_offset,
+                    );
+                    let delta = (motion.velocity - parent.velocity).length();
+                    max_split_velocity_delta = max_split_velocity_delta.max(delta);
+                    split_impulse_events += u32::from(delta > 1e-5);
+                    split_translation_samples += 1;
                     children.push(Body::new(
                         chunk,
-                        parent.position + offset,
+                        motion.position,
                         parent.rotation,
-                        receding_velocity(
-                            parent.velocity + parent.angular_velocity.cross(offset) + kick,
-                            camera_forward,
-                            8.,
-                        ),
-                        parent.angular_velocity + Vec3::new(noise(k as u64) * 4. - 2., 2., -1.),
+                        motion.velocity,
+                        parent.angular_velocity,
                         effect.age,
                         f32::INFINITY,
                         1,
@@ -615,11 +664,22 @@ pub(super) fn update(
         if effect.age > 1.05 {
             retained += effect.bodies.len();
         }
-        if effect.age > 0.75 && effect.bodies.iter().any(|b| !b.chunk.heat.is_empty()) {
+        if cooled_heat(1., effect.age) < cooled_heat(1., previous_age)
+            && effect.bodies.iter().any(|b| !b.chunk.heat.is_empty())
+        {
             cooling_seen = true;
         }
         i += 1;
     }
+    state.unforced_flight_steps += unforced_flight_steps;
+    state.unforced_course_changes += unforced_course_changes;
+    state.max_unforced_velocity_delta = state
+        .max_unforced_velocity_delta
+        .max(max_unforced_velocity_delta);
+    state.max_unforced_path_error = state.max_unforced_path_error.max(max_unforced_path_error);
+    state.split_translation_samples += split_translation_samples;
+    state.split_impulse_events += split_impulse_events;
+    state.max_split_velocity_delta = state.max_split_velocity_delta.max(max_split_velocity_delta);
     state.camera_approach_steps += camera_approach_steps;
     state.max_camera_approach = state.max_camera_approach.max(max_camera_approach);
     state.depth_motion_steps += depth_motion_steps;
@@ -672,13 +732,14 @@ pub(super) fn update(
             let seed = request.id.wrapping_mul(131).wrapping_add(k as u64);
             let offset = rotation * (Vec3::from_array(chunk.pivot) - contact);
             let mass = chunk.cells.0.len() as f32;
-            let speed = 12. + noise(seed) * 4. + (1. / mass.sqrt());
-            let velocity = receding_velocity(
-                forward * speed
-                    + offset.normalize_or_zero() * (0.8 + noise(seed.wrapping_add(1)) * 1.2)
-                    + Vec3::new(request.velocity.x, request.velocity.y, request.velocity_z) * 0.08,
+            let speed = 26. + noise(seed) * 4. + (1. / mass.sqrt());
+            let velocity = launch_debris_velocity(
+                forward,
+                Vec3::new(request.velocity.x, request.velocity.y, request.velocity_z),
+                offset.normalize_or_zero() * (0.8 + noise(seed.wrapping_add(1)) * 1.2),
+                speed,
                 camera_forward,
-                8.,
+                escape_tangent,
             );
             let omega = offset.cross(forward) * 1.2
                 + Vec3::new(
