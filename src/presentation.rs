@@ -126,6 +126,8 @@ struct Smoke {
     pose_probed: bool,
     hit_probe_x: f32,
     hit_probe_time: f32,
+    backdrop_audited: Option<(u32, u32, bool)>,
+    backdrop_checks: u32,
 }
 fn mesh(v: voxel::Voxels, unit: f32) -> Mesh {
     let g = v.mesh(unit);
@@ -324,13 +326,14 @@ fn setup(
         perceptual_roughness: 0.9,
         ..default()
     });
+    let (position, rotation, scale) = battlestar_voxel::backdrop::galactica_transform(1.6);
     commands.spawn((
         Galactica,
         Mesh3d(galactica.clone()),
         MeshMaterial3d(distant),
-        Transform::from_xyz(13., 8., -16.)
-            .with_rotation(Quat::from_rotation_z(-0.38) * Quat::from_rotation_x(0.15))
-            .with_scale(Vec3::splat(0.65)),
+        Transform::from_translation(position)
+            .with_rotation(rotation)
+            .with_scale(Vec3::splat(scale)),
     ));
     commands.insert_resource(Art {
         eye,
@@ -816,6 +819,7 @@ fn smoke_test(
     mut menu_buttons: Query<(&menu::Action, &mut Interaction, &ComputedNode)>,
     menu_root: Single<&Visibility, With<menu::MenuRoot>>,
     camera_projection: Single<&Projection, With<Camera3d>>,
+    galactica: Single<&Transform, With<Galactica>>,
 ) {
     stats.frames += 1;
     if time.elapsed_secs() > 5. && stats.samples.len() < 10000 {
@@ -836,6 +840,32 @@ fn smoke_test(
         matches!(&**camera_projection, Projection::Orthographic(_)),
         "arcade hit projection must not have depth parallax"
     );
+    let size = (
+        window.physical_width(),
+        window.physical_height(),
+        session.0.wave < 4,
+    );
+    if smoke.backdrop_audited != Some(size) {
+        let aspect = size.0.max(1) as f32 / size.1.max(1) as f32;
+        let height = 17.5_f32.max(26. / aspect);
+        let half_view = Vec2::new(height * aspect, height) * 0.5;
+        let (low, high) = battlestar_voxel::backdrop::projected_galactica_bounds(
+            size.2,
+            galactica.translation,
+            galactica.rotation,
+            galactica.scale.x,
+        );
+        assert!(
+            low.cmpgt(-half_view).all() && high.cmplt(half_view).all(),
+            "full Galactica hull must stay inside current viewport: {low:?}..{high:?} view={half_view:?}"
+        );
+        smoke.backdrop_audited = Some(size);
+        smoke.backdrop_checks += 1;
+        info!(
+            "SMOKE full Galactica framing verified {}x{} classic={}",
+            size.0, size.1, size.2
+        );
+    }
     if session.0.phase == Phase::Playing {
         assert_eq!(
             **player,
@@ -1262,7 +1292,10 @@ fn smoke_test(
                     shatters.max_split_velocity_delta
                 );
             let report = report.trim_end().trim_end_matches('}').to_owned()
-                + ",\"strict_2d_projection\":true,\"nonfatal_pose_continuity\":true}\n";
+                + &format!(
+                    ",\"strict_2d_projection\":true,\"nonfatal_pose_continuity\":true,\"galactica_framing_checks\":{}}}\n",
+                    smoke.backdrop_checks
+                );
             std::fs::write(std::path::Path::new(&dir).join("Smoke_Result.json"), report)
                 .expect("write smoke result");
             info!("SMOKE complete");
@@ -1322,9 +1355,18 @@ fn sync_era(
     *last = Some(era);
 }
 
-fn fit_camera(window: Single<&Window>, mut projection: Single<&mut Projection, With<Camera3d>>) {
+fn fit_camera(
+    window: Single<&Window>,
+    mut projection: Single<&mut Projection, With<Camera3d>>,
+    mut galactica: Single<&mut Transform, With<Galactica>>,
+) {
     let aspect = window.physical_width().max(1) as f32 / window.physical_height().max(1) as f32;
     let height = 17.5_f32.max(26. / aspect);
+    let (position, rotation, scale) = battlestar_voxel::backdrop::galactica_transform(aspect);
+    let transform = Transform::from_translation(position)
+        .with_rotation(rotation)
+        .with_scale(Vec3::splat(scale));
+    galactica.set_if_neq(transform);
     let needs_update = match &**projection {
         Projection::Orthographic(p) => !matches!(p.scaling_mode,
             ScalingMode::FixedVertical { viewport_height } if viewport_height == height),

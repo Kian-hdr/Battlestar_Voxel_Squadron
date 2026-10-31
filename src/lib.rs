@@ -1,3 +1,4 @@
+pub mod backdrop;
 pub mod combat_plane;
 pub mod exhaust;
 pub mod layout;
