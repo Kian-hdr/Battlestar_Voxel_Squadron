@@ -15,11 +15,21 @@ pub struct Controls(pub battlestar_voxel::simulation::Input);
 // Record both sides of the runner boundary. A completed smoke scenario only
 // requests exit; this message proves the event loop and its world teardown returned.
 fn main() -> AppExit {
+    let soak = std::env::args().any(|a| a == "--soak-test");
     let plugins = DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "Battlestar: Voxel Squadron".into(),
-            resolution: WindowResolution::new(1280, 800),
-            mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
+            resolution: if soak {
+                WindowResolution::new(1800, 1080)
+            } else {
+                WindowResolution::new(1280, 800)
+            },
+            mode: if soak {
+                WindowMode::Windowed
+            } else {
+                WindowMode::BorderlessFullscreen(MonitorSelection::Primary)
+            },
+            decorations: !soak,
             present_mode: PresentMode::AutoVsync,
             resizable: true,
             resize_constraints: bevy::window::WindowResizeConstraints {

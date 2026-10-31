@@ -5,13 +5,16 @@
 use super::shatter::ShatterEffects;
 use crate::Session;
 use battlestar_voxel::simulation::Phase;
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowMode};
 use std::{fs, path::PathBuf};
 
 #[derive(Resource)]
 pub(super) struct Soak {
     pub enabled: bool,
     pub draining: bool,
+    pub reference_debris: bool,
+    window_configured: bool,
+    stable_size_frames: u8,
     duration: f64,
     boot: Option<f64>,
     started: Option<f64>,
@@ -38,6 +41,9 @@ impl Default for Soak {
         Self {
             enabled: std::env::args().any(|a| a == "--soak-test"),
             draining: false,
+            reference_debris: std::env::var("BSVX_SOAK_REFERENCE").is_ok_and(|v| v == "1"),
+            window_configured: false,
+            stable_size_frames: 0,
             duration: std::env::var("BSVX_SOAK_SECONDS")
                 .ok()
                 .and_then(|s| s.parse::<f64>().ok())
@@ -102,7 +108,7 @@ pub(super) fn run(
     meshes: Res<Assets<Mesh>>,
     materials: Res<Assets<StandardMaterial>>,
     entities: Query<Entity>,
-    window: Single<&Window>,
+    mut window: Single<&mut Window>,
     mut exit: MessageWriter<AppExit>,
 ) {
     if !soak.enabled || soak.finished {
@@ -111,7 +117,35 @@ pub(super) fn run(
     let now = time.elapsed_secs_f64();
     let boot = *soak.boot.get_or_insert(now);
     let Some(started) = soak.started else {
-        if now - boot >= 1. {
+        // Only the explicit soak harness controls window geometry. Decorations
+        // and fullscreen chrome must not give the two modes different buffers.
+        if !soak.window_configured {
+            window.mode = WindowMode::Windowed;
+            window.decorations = false;
+            window.resolution.set_physical_resolution(3600, 2160);
+            soak.window_configured = true;
+            return;
+        }
+        if window.physical_width() == 3600
+            && window.physical_height() == 2160
+            && window.mode == WindowMode::Windowed
+            && !window.decorations
+        {
+            soak.stable_size_frames = soak.stable_size_frames.saturating_add(1).min(3);
+        } else {
+            soak.stable_size_frames = 0;
+        }
+        if now - boot >= 10. && soak.stable_size_frames < 3 {
+            error!(
+                "SOAK fixed-buffer startup failed: requested3600x2160, observed{}x{}",
+                window.physical_width(),
+                window.physical_height()
+            );
+            soak.finished = true;
+            exit.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
+            return;
+        }
+        if now - boot >= 1. && soak.stable_size_frames >= 3 {
             session.0.start();
             session.1 = session.1.wrapping_add(1);
             session.0.invulnerable = 999.;
@@ -124,7 +158,10 @@ pub(super) fn run(
                 soak.finished = true;
                 exit.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
             }
-            info!("SOAK started duration_s={} drain_s=20", soak.duration);
+            info!(
+                "SOAK started duration_s={} drain_s=20 physical=3600x2160 reference_debris={}",
+                soak.duration, soak.reference_debris
+            );
         }
         return;
     };
@@ -216,7 +253,8 @@ pub(super) fn run(
             .map(|v| format!("{v:.2}"))
             .unwrap_or_else(|| "null".into());
         let report = format!(
-            "{{\"schema\":1,\"complete\":true,\"report_only\":true,\"duration_s\":{elapsed:.3},\"requested_duration_s\":{:.3},\"drain_s\":20,\"samples\":{},\"frames\":{},\"initial_mesh_assets\":{},\"initial_material_assets\":{},\"initial_entities\":{},\"final_effects\":{},\"final_bodies\":{},\"final_cubes\":{},\"final_vertices\":{},\"final_outside_bodies\":{},\"final_oldest_age_s\":{:.4},\"final_mesh_assets\":{},\"final_material_assets\":{},\"final_entities\":{},\"final_rss_kib\":{},\"peak_sampled_effects\":{},\"peak_sampled_bodies\":{},\"peak_sampled_vertices\":{},\"peak_sampled_mesh_assets\":{},\"drained\":{},\"final_window_mean_ms\":{mean:.4},\"final_window_p95_ms\":{p95:.4},\"final_window_update_us\":{mean_update_us:.3},\"final_window_render_us\":{mean_render_us:.3},\"final_cpu_percent\":{cpu_json},\"timing_columns\":\"display-frame sampled latest system durations averaged over each window\",\"cpu_percent_source\":\"native ps process snapshot\"}}\n",
+            "{{\"schema\":1,\"complete\":true,\"report_only\":true,\"reference_debris\":{},\"requested_physical_width\":3600,\"requested_physical_height\":2160,\"duration_s\":{elapsed:.3},\"requested_duration_s\":{:.3},\"drain_s\":20,\"samples\":{},\"frames\":{},\"initial_mesh_assets\":{},\"initial_material_assets\":{},\"initial_entities\":{},\"final_effects\":{},\"final_bodies\":{},\"final_cubes\":{},\"final_vertices\":{},\"final_outside_bodies\":{},\"final_oldest_age_s\":{:.4},\"final_mesh_assets\":{},\"final_material_assets\":{},\"final_entities\":{},\"final_rss_kib\":{},\"peak_sampled_effects\":{},\"peak_sampled_bodies\":{},\"peak_sampled_vertices\":{},\"peak_sampled_mesh_assets\":{},\"drained\":{},\"final_window_mean_ms\":{mean:.4},\"final_window_p95_ms\":{p95:.4},\"final_window_update_us\":{mean_update_us:.3},\"final_window_render_us\":{mean_render_us:.3},\"final_cpu_percent\":{cpu_json},\"timing_columns\":\"display-frame sampled latest system durations averaged over each window\",\"cpu_percent_source\":\"native ps process snapshot\"}}\n",
+            soak.reference_debris,
             soak.duration,
             soak.samples,
             soak.frames,

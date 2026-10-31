@@ -557,6 +557,7 @@ pub(super) fn update(
     galactica: Single<&Transform, With<super::Galactica>>,
     camera: Single<(&Transform, &Projection), With<Camera3d>>,
     window: Single<&Window>,
+    soak: Res<super::soak::Soak>,
     mut queue: ResMut<ShatterQueue>,
     mut state: ResMut<ShatterEffects>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -607,6 +608,7 @@ pub(super) fn update(
     let clip = actual.get_clip_from_view() * camera_transform.to_matrix().inverse();
     state.last_clip = Some(clip);
     let frustum = battlestar_voxel::viewport::Frustum::from_clip(clip);
+    let reference = soak.enabled && soak.reference_debris;
     let camera_forward = *camera_transform.forward();
     // A conservative corner cone makes a launch/contact departure clear the
     // current view without any later acceleration or steering.
@@ -716,9 +718,13 @@ pub(super) fn update(
         }
         effect.bodies.extend(children);
         let before = effect.bodies.len();
-        effect
-            .bodies
-            .retain(|b| frustum.box_visible(b.position, b.rotation, b.bounds_min, b.bounds_max));
+        effect.bodies.retain(|b| {
+            if reference {
+                frustum.sphere_visible(b.position, b.radius)
+            } else {
+                frustum.box_visible(b.position, b.rotation, b.bounds_min, b.bounds_max)
+            }
+        });
         retired += before - effect.bodies.len();
         effect.cubes = effect.bodies.iter().map(|b| b.chunk.cells.0.len()).sum();
         if effect.bodies.is_empty() {
@@ -763,8 +769,18 @@ pub(super) fn update(
         // The immutable model is already cached for collisions. Fracture makes
         // private chunk copies; rebuilding the procedural hull on every hit
         // adds avoidable allocation and CPU spikes during later waves.
-        let model =
-            &hull_models()[usize::from(request.classic) + if request.player { 0 } else { 2 }].cells;
+        let generated;
+        let model = if reference {
+            // Reproducible historical path, only for an explicitly enabled soak.
+            generated = if request.player {
+                voxel::viper(request.classic)
+            } else {
+                voxel::raider(request.classic)
+            };
+            &generated
+        } else {
+            &hull_models()[usize::from(request.classic) + if request.player { 0 } else { 2 }].cells
+        };
         let origin = visual_position(Vec2::new(request.pos.x, request.pos.y), request.depth);
         let logical_contact =
             visual_position(Vec2::new(request.impact.x, request.impact.y), request.depth);
@@ -825,7 +841,11 @@ pub(super) fn update(
         // Cull pieces that were born fully outside the actual viewport before
         // allocating render entities/buffers. A partly visible OBB is retained.
         let before = bodies.len();
-        bodies.retain(|b| frustum.box_visible(b.position, b.rotation, b.bounds_min, b.bounds_max));
+        if !reference {
+            bodies.retain(|b| {
+                frustum.box_visible(b.position, b.rotation, b.bounds_min, b.bounds_max)
+            });
+        }
         state.offscreen_retired += before - bodies.len();
         let cubes = bodies.iter().map(|b| b.chunk.cells.0.len()).sum();
         if bodies.is_empty() {
