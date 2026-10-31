@@ -17,11 +17,12 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>Battlestar_Voxel</string>
 <key>CFBundleIdentifier</key><string>dev.kiankonrad.battlestar-voxel</string>
-<key>CFBundleName</key><string>Battlestar: Voxel Squadron</string>
-<key>CFBundleDisplayName</key><string>Battlestar: Voxel Squadron</string>
+<key>CFBundleName</key><string>Battlestar_Voxel_Squadron</string>
+<key>CFBundleDisplayName</key><string>Battlestar_Voxel_Squadron</string>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.4.3</string>
-<key>CFBundleVersion</key><string>17</string>
+<key>CFBundleVersion</key><string>18</string>
 <key>LSMinimumSystemVersion</key><string>12.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSHumanReadableCopyright</key><string>Copyright 2026 Kian Konrad Tajbakhsh. Unofficial non-commercial fan project.</string>
@@ -30,6 +31,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>
 PLIST
+# macOS honors a localized display name when the unlocalized name matches
+# the on-disk bundle name. Keep portable filenames while showing the title.
+mkdir -p "$APP/Contents/Resources/en.lproj"
+cat > "$APP/Contents/Resources/en.lproj/InfoPlist.strings" <<'STRINGS'
+"CFBundleName" = "Battlestar: Voxel Squadron";
+"CFBundleDisplayName" = "Battlestar: Voxel Squadron";
+STRINGS
+plutil -lint "$APP/Contents/Resources/en.lproj/InfoPlist.strings"
 cp assets/App_Icon/Compiled/Assets.car "$APP/Contents/Resources/Assets.car"
 cp assets/App_Icon/Compiled/Battlestar_Voxel.icns "$APP/Contents/Resources/Battlestar_Voxel.icns"
 cp LICENSE THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
