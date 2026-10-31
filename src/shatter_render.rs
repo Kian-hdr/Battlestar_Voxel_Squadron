@@ -134,8 +134,54 @@ pub(super) struct ShatterEffects {
     pub split_impulse_events: u32,
     pub max_split_velocity_delta: f32,
     last_bounce: Option<(Vec3, f32)>,
+    update_us: f64,
+    render_us: f64,
+    last_clip: Option<Mat4>,
+}
+#[derive(Default)]
+pub(super) struct Diagnostic {
+    pub effects: usize,
+    pub bodies: usize,
+    pub cubes: usize,
+    pub vertices: usize,
+    pub oldest_age: f32,
+    pub outside_bodies: usize,
 }
 impl ShatterEffects {
+    pub fn timings(&self) -> (f64, f64) {
+        (self.update_us, self.render_us)
+    }
+    pub fn diagnostics(&self) -> Diagnostic {
+        Diagnostic {
+            effects: self.active.len(),
+            bodies: self.active.iter().map(|e| e.bodies.len()).sum(),
+            cubes: self.active_cubes(),
+            vertices: self
+                .active
+                .iter()
+                .flat_map(|e| &e.bodies)
+                .map(|b| b.surface.positions.len())
+                .sum(),
+            oldest_age: self.active.iter().map(|e| e.age).fold(0., f32::max),
+            outside_bodies: self
+                .active
+                .iter()
+                .flat_map(|e| &e.bodies)
+                .filter(|b| {
+                    self.last_clip.is_some_and(|clip| {
+                        !battlestar_voxel::viewport::box_visible(
+                            clip,
+                            b.position,
+                            b.rotation,
+                            b.bounds_min,
+                            b.bounds_max,
+                        )
+                    })
+                })
+                .count(),
+        }
+    }
+
     pub fn review_burst(&self, classic: bool) -> bool {
         self.active.iter().any(|e| {
             e.classic == classic
@@ -286,12 +332,14 @@ pub(super) fn render(
     if session.0.phase == Phase::Paused {
         return;
     }
+    let started = std::time::Instant::now();
     let hot_vertices = state
         .active
         .iter()
         .map(|effect| draw(effect, &mut meshes, *camera.forward()))
         .sum();
     state.peak_hot_vertices = state.peak_hot_vertices.max(hot_vertices);
+    state.render_us = started.elapsed().as_secs_f64() * 1e6;
 }
 fn retire(commands: &mut Commands, meshes: &mut Assets<Mesh>, effect: Active) {
     commands.entity(effect.core).try_despawn();
@@ -539,6 +587,7 @@ pub(super) fn update(
             ..default()
         }));
     }
+    let started = std::time::Instant::now();
     let dt = time.delta_secs();
     let (camera_transform, projection) = *camera;
     let aspect = window.physical_width().max(1) as f32 / window.physical_height().max(1) as f32;
@@ -556,6 +605,8 @@ pub(super) fn update(
         window.physical_height().max(1) as f32,
     );
     let clip = actual.get_clip_from_view() * camera_transform.to_matrix().inverse();
+    state.last_clip = Some(clip);
+    let frustum = battlestar_voxel::viewport::Frustum::from_clip(clip);
     let camera_forward = *camera_transform.forward();
     // A conservative corner cone makes a launch/contact departure clear the
     // current view without any later acceleration or steering.
@@ -667,7 +718,7 @@ pub(super) fn update(
         let before = effect.bodies.len();
         effect
             .bodies
-            .retain(|b| battlestar_voxel::viewport::sphere_visible(clip, b.position, b.radius));
+            .retain(|b| frustum.box_visible(b.position, b.rotation, b.bounds_min, b.bounds_max));
         retired += before - effect.bodies.len();
         effect.cubes = effect.bodies.iter().map(|b| b.chunk.cells.0.len()).sum();
         if effect.bodies.is_empty() {
@@ -709,11 +760,11 @@ pub(super) fn update(
     for request in queue.0.drain(..) {
         let rotation = Quat::from_array(request.rotation);
         let inverse = rotation.inverse();
-        let model = if request.player {
-            voxel::viper(request.classic)
-        } else {
-            voxel::raider(request.classic)
-        };
+        // The immutable model is already cached for collisions. Fracture makes
+        // private chunk copies; rebuilding the procedural hull on every hit
+        // adds avoidable allocation and CPU spikes during later waves.
+        let model =
+            &hull_models()[usize::from(request.classic) + if request.player { 0 } else { 2 }].cells;
         let origin = visual_position(Vec2::new(request.pos.x, request.pos.y), request.depth);
         let logical_contact =
             visual_position(Vec2::new(request.impact.x, request.impact.y), request.depth);
@@ -724,11 +775,11 @@ pub(super) fn update(
         // surface along the viewing ray for local heat/fracture placement.
         let local_ray = inverse * camera_forward;
         let ray_origin = local_contact - local_ray * 8.;
-        let contact = voxel_damage::ray_hit(&model, ray_origin.to_array(), local_ray.to_array())
+        let contact = voxel_damage::ray_hit(model, ray_origin.to_array(), local_ray.to_array())
             .map(Vec3::from_array)
             .unwrap_or(local_contact);
         let chunks = fracture(
-            &model,
+            model,
             contact.to_array(),
             request.id ^ ((session.0.wave as u64) << 32),
         );
@@ -771,6 +822,15 @@ pub(super) fn update(
                 chunk, position, rotation, velocity, omega, release, split_at, 0,
             ));
         }
+        // Cull pieces that were born fully outside the actual viewport before
+        // allocating render entities/buffers. A partly visible OBB is retained.
+        let before = bodies.len();
+        bodies.retain(|b| frustum.box_visible(b.position, b.rotation, b.bounds_min, b.bounds_max));
+        state.offscreen_retired += before - bodies.len();
+        let cubes = bodies.iter().map(|b| b.chunk.cells.0.len()).sum();
+        if bodies.is_empty() {
+            continue;
+        }
         let solid = meshes.add(empty_mesh());
         let hot = meshes.add(empty_mesh());
         let core = commands
@@ -806,4 +866,5 @@ pub(super) fn update(
     }
     let body_count = state.active.iter().map(|e| e.bodies.len()).sum();
     state.peak_bodies = state.peak_bodies.max(body_count);
+    state.update_us = started.elapsed().as_secs_f64() * 1e6;
 }

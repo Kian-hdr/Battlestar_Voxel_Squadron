@@ -41,7 +41,7 @@ fn main() -> AppExit {
         .insert_resource(ClearColor(Color::srgb(0.002, 0.005, 0.012)))
         .insert_resource(Time::<Fixed>::from_seconds(DT as f64))
         .insert_resource(ValidationMode(
-            std::env::args().any(|a| a == "--smoke-test"),
+            std::env::args().any(|a| a == "--smoke-test" || a == "--soak-test"),
         ))
         .init_resource::<Session>()
         .init_resource::<Controls>()

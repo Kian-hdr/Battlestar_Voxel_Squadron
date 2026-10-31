@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${BSVX_SIGN_IDENTITY:?Set your Developer ID Application identity}"
 APP="$PWD/dist/Battlestar_Voxel_Squadron.app"
-DMG="$PWD/dist/Battlestar_Voxel_Squadron_v0.4.3_macOS_Apple_Silicon.dmg"
+DMG="$PWD/dist/Battlestar_Voxel_Squadron_v0.4.4_macOS_Apple_Silicon.dmg"
 [[ -d "$APP" ]] || { echo 'Package and notarize the app first.' >&2; exit 1; }
 codesign --verify --strict "$APP"
 xcrun stapler validate "$APP"
@@ -13,7 +13,7 @@ ditto "$APP" "$STAGE/Battlestar_Voxel_Squadron.app"
 ln -s /Applications "$STAGE/Applications"
 cp LICENSE THIRD_PARTY_NOTICES.md "$STAGE/"
 cat > "$STAGE/Read_Me.txt" <<'EOF'
-Battlestar: Voxel Squadron v0.4.3
+Battlestar: Voxel Squadron v0.4.4
 Created by Kian Konrad Tajbakhsh
 
 Drag Battlestar_Voxel_Squadron.app to Applications and launch it.

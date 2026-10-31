@@ -12,7 +12,8 @@ impl Default for AudioSettings {
     fn default() -> Self {
         Self {
             effects_volume: 0.20,
-            silent_validation: std::env::args().any(|arg| arg == "--smoke-test")
+            silent_validation: std::env::args()
+                .any(|arg| arg == "--smoke-test" || arg == "--soak-test")
                 || std::env::var_os("BSVX_SILENT_CHECK").is_some(),
         }
     }

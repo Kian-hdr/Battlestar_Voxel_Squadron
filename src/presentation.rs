@@ -23,6 +23,8 @@ use std::collections::{BTreeMap, BTreeSet};
 mod menu;
 #[path = "shatter_render.rs"]
 mod shatter;
+#[path = "soak.rs"]
+mod soak;
 
 pub(super) const PLAYER_LAYER: f32 = 4.;
 const SHOT_LAYER: f32 = 6.;
@@ -30,7 +32,8 @@ const SHOT_LAYER: f32 = 6.;
 pub struct PresentationPlugin;
 impl Plugin for PresentationPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<FleetVisuals>()
+        app.init_resource::<soak::Soak>()
+            .init_resource::<FleetVisuals>()
             .init_resource::<FrameStats>()
             .init_resource::<Smoke>()
             .init_resource::<shatter::ShatterQueue>()
@@ -54,6 +57,7 @@ impl Plugin for PresentationPlugin {
                     animate_background,
                     audit_projectile_colors,
                     smoke_test,
+                    soak::run,
                 )
                     .chain(),
             );
@@ -432,23 +436,25 @@ fn tick(
     sounds: Res<Sounds>,
     audio_settings: Res<AudioSettings>,
     smoke: Res<Smoke>,
+    soak: Res<soak::Soak>,
     mut shatters: ResMut<shatter::ShatterQueue>,
 ) {
     let active = session.0.phase == Phase::Playing;
-    let input = if smoke.enabled && matches!(smoke.stage, 2 | 4) {
-        let g = &session.0;
-        let target = g
-            .enemies
-            .iter()
-            .filter(|e| e.pos.y > g.player.y)
-            .min_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
-        Input {
-            axis: target.map_or(0., |e| ((e.pos.x - g.player.x) * 8.).clamp(-1., 1.)),
-            fire: true,
-        }
-    } else {
-        controls.0
-    };
+    let input =
+        if (smoke.enabled && matches!(smoke.stage, 2 | 4)) || (soak.enabled && !soak.draining) {
+            let g = &session.0;
+            let target = g
+                .enemies
+                .iter()
+                .filter(|e| e.pos.y > g.player.y)
+                .min_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
+            Input {
+                axis: target.map_or(0., |e| ((e.pos.x - g.player.x) * 8.).clamp(-1., 1.)),
+                fire: true,
+            }
+        } else {
+            controls.0
+        };
     session.0.step(input, time.delta_secs());
     if !active {
         return;

@@ -10,23 +10,66 @@ pub fn battle_fov(aspect: f32) -> f32 {
     2. * (height / (2. * 38.)).atan()
 }
 
+/// Reuse one camera's unnormalized clip planes across all fragment checks.
+/// Keeping the original plane scale preserves the existing comparisons, including
+/// the constant far plane of an infinite reverse-Z projection.
+#[derive(Clone, Copy, Debug)]
+pub struct Frustum {
+    planes: [glam::Vec4; 6],
+    normal_lengths: [f32; 6],
+}
+impl Frustum {
+    pub fn from_clip(clip: Mat4) -> Self {
+        let rows = clip
+            .transpose()
+            .to_cols_array_2d()
+            .map(glam::Vec4::from_array);
+        let planes = [
+            rows[3] + rows[0],
+            rows[3] - rows[0],
+            rows[3] + rows[1],
+            rows[3] - rows[1],
+            rows[2],
+            rows[3] - rows[2],
+        ];
+        let normal_lengths = planes.map(|p| p.truncate().length());
+        Self {
+            planes,
+            normal_lengths,
+        }
+    }
+
+    pub fn sphere_visible(&self, center: Vec3, radius: f32) -> bool {
+        self.planes
+            .iter()
+            .zip(self.normal_lengths)
+            .all(|(p, length)| p.dot(center.extend(1.)) >= -radius * length)
+    }
+
+    pub fn box_visible(&self, position: Vec3, rotation: Quat, low: Vec3, high: Vec3) -> bool {
+        let center = position + rotation * ((low + high) * 0.5);
+        let half = (high - low) * 0.5;
+        let axes = [rotation * Vec3::X, rotation * Vec3::Y, rotation * Vec3::Z];
+        self.planes.iter().all(|p| {
+            let n = p.truncate();
+            let extent = half.x * n.dot(axes[0]).abs()
+                + half.y * n.dot(axes[1]).abs()
+                + half.z * n.dot(axes[2]).abs();
+            p.dot(center.extend(1.)) >= -extent
+        })
+    }
+}
+
 /// Keep the entire bounding sphere until it has crossed a camera clip plane.
 /// Testing the pivot alone would pop large, partly visible pieces at the edges.
 pub fn sphere_visible(clip_from_world: Mat4, center: Vec3, radius: f32) -> bool {
-    let rows = clip_from_world
-        .transpose()
-        .to_cols_array_2d()
-        .map(glam::Vec4::from_array);
-    [
-        rows[3] + rows[0],
-        rows[3] - rows[0],
-        rows[3] + rows[1],
-        rows[3] - rows[1],
-        rows[2],
-        rows[3] - rows[2],
-    ]
-    .iter()
-    .all(|p| p.dot(center.extend(1.)) >= -radius * p.truncate().length())
+    Frustum::from_clip(clip_from_world).sphere_visible(center, radius)
+}
+
+/// Oriented-box frustum test: unlike a sphere, it excludes empty space around
+/// long thin shards while retaining every point inside the rotated bounds.
+pub fn box_visible(clip: Mat4, position: Vec3, rotation: Quat, low: Vec3, high: Vec3) -> bool {
+    Frustum::from_clip(clip).box_visible(position, rotation, low, high)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -758,5 +801,77 @@ mod tests {
         assert!(shadow[0] > 0.2 && shadow[2] > shadow[0]);
         assert_eq!(shadow[3], 1.);
         assert_eq!(shadow, debris_shadow_tint(white, 200.));
+    }
+}
+
+#[cfg(test)]
+mod frustum_cache_tests {
+    use super::*;
+
+    #[test]
+    fn cached_planes_preserve_original_sphere_and_box_comparisons() {
+        for clip in [
+            Mat4::perspective_rh(0.8, 1.6, 0.1, 200.),
+            Mat4::perspective_infinite_reverse_rh(0.8, 1.6, 0.1),
+            Mat4::orthographic_rh(-14., 14., -8.75, 8.75, 200., 0.1),
+        ] {
+            let frustum = Frustum::from_clip(clip);
+            let rows = clip
+                .transpose()
+                .to_cols_array_2d()
+                .map(glam::Vec4::from_array);
+            let original_planes = [
+                rows[3] + rows[0],
+                rows[3] - rows[0],
+                rows[3] + rows[1],
+                rows[3] - rows[1],
+                rows[2],
+                rows[3] - rows[2],
+            ];
+            for position in [
+                Vec3::ZERO,
+                Vec3::new(14.1, 0., -20.),
+                Vec3::new(-30., 4., -80.),
+                Vec3::new(0., 0., -10000.),
+            ] {
+                for radius in [0., 0.1, 2.] {
+                    let original = original_planes
+                        .iter()
+                        .all(|p| p.dot(position.extend(1.)) >= -radius * p.truncate().length());
+                    assert_eq!(frustum.sphere_visible(position, radius), original);
+                    assert_eq!(sphere_visible(clip, position, radius), original);
+                }
+                for rotation in [
+                    Quat::IDENTITY,
+                    Quat::from_rotation_y(0.4) * Quat::from_rotation_z(-0.7),
+                ] {
+                    let low = Vec3::new(-0.1, -2., -0.2);
+                    let high = Vec3::new(0.3, 1., 0.2);
+                    let center = position + rotation * ((low + high) * 0.5);
+                    let half = (high - low) * 0.5;
+                    let axes = [rotation * Vec3::X, rotation * Vec3::Y, rotation * Vec3::Z];
+                    let original = original_planes.iter().all(|p| {
+                        let n = p.truncate();
+                        let extent = half.x * n.dot(axes[0]).abs()
+                            + half.y * n.dot(axes[1]).abs()
+                            + half.z * n.dot(axes[2]).abs();
+                        p.dot(center.extend(1.)) >= -extent
+                    });
+                    assert_eq!(frustum.box_visible(position, rotation, low, high), original);
+                    assert_eq!(box_visible(clip, position, rotation, low, high), original);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn infinite_reverse_z_constant_plane_keeps_distant_visible_fragments() {
+        let clip = Mat4::perspective_infinite_reverse_rh(0.8, 1.6, 0.1);
+        let frustum = Frustum::from_clip(clip);
+        assert!(frustum.normal_lengths.contains(&0.));
+        let distant = Vec3::new(0., 0., -10000.);
+        assert!(frustum.sphere_visible(distant, 1.));
+        assert!(frustum.box_visible(distant, Quat::IDENTITY, -Vec3::ONE, Vec3::ONE));
+        assert!(!frustum.sphere_visible(Vec3::new(0., 0., 10.), 1.));
     }
 }
