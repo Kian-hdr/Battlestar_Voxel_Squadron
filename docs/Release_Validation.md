@@ -6,7 +6,17 @@ The final replay checked 29,385 actual projectile mesh/color associations (inclu
 
 At physical 1920×1080, 1,021 frames averaged 8.333 ms / p95 8.775 ms (about 120 FPS) on Apple M5. The complete replay averaged 8.37 ms / p95 8.84 ms. These are bounded native measurements, not universal hardware guarantees. Target acquisition and damage remain deterministic and material-accurate; player horizontal aiming is unchanged.
 
-Native Windows/Linux package jobs and final artifact receipts will be recorded after completion. Graphical gameplay on those systems remains untested. Existing licensing, private incorporated-audio and fan-rights boundaries below remain applicable.
+Native Windows/Linux package jobs and final artifact receipts are complete below. Graphical gameplay on those systems remains untested. Existing licensing, private incorporated-audio and fan-rights boundaries below remain applicable.
+
+## v0.4.2 package identity and completed checks
+
+Compiled code: `26ba773a796d72655e9cde0f37db00eea81575df`. [Native packages](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41149829188) and [source checks](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41149829922) succeeded. Actual native job logs record 86 passing tests on Windows and Linux, plus successful graphics Clippy, release linking and packaging.
+
+- **Mac Apple Silicon:** final app and DMG signed, notarized, stapled and Gatekeeper-accepted; the DMG was mounted read-only and its copied app/executable hash verified against the native tested build. App receipt `1390005a-1dcc-4c73-89c2-c7df17afd0ab`; DMG `c0a39094-d80b-486d-bad2-122ab5d89115`.
+- **Windows x64:** native PE32+ GUI executable, 254-file roster, 253 internal checksums, approved embedded effects, safe paths and source notices verified. Ordinary text files use expected Windows CRLF checkout conversion; byte-preserved notices remain exact. Unsigned; graphical gameplay not tested.
+- **Linux x64:** native ELF64 PIE, executable/launcher permissions, 255-file roster, 254 internal checksums, source notices and approved embedded effects verified. All 15 archive checks pass. Graphical gameplay not tested.
+
+Three platform packages, individual checksum files and aggregate SHA256SUMS.txt form seven release assets; their uploaded digests and sizes match final local bytes. Final documentation/screenshots are the only differences from compiled source. Screenshots are actual game captures, resized to at most 1920 pixels for documentation; raw captures are retained. No AI raster generation or content retouching was used. Previous releases and private audio boundaries remain intact.
 
 ## Historical v0.4.1 validation
 
