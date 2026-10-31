@@ -1,3 +1,12 @@
+# v0.4.4 · More efficient debris cleanup
+
+- Retire debris using tighter rotated geometry bounds for the current viewport, retaining partially visible pieces.
+- Skip render-resource creation for fragments already fully outside the view.
+- Reuse immutable source hulls during destruction instead of regenerating each ship model.
+- Preserve momentum, opaque shadowed fragments, voxel exhaust, strict 2D hits, stable Viper position, Galactica framing and the proper app display name.
+
+See [release validation](Release_Validation.md) for sustained measurements and platform limits.
+
 # v0.4.3 · Strict 2D hits, stable Viper and voxel effects
 
 - Restored the Galactica’s full right-side framing and earlier apparent size; its complete hull stays visible as the window resizes.

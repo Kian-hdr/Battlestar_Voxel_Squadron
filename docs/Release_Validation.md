@@ -1,3 +1,37 @@
+# Desktop release validation · v0.4.4
+
+Mac build 20; compiled source `c72133fef9c2ea1a5b1c75299de3b07c961dd55c`. All 108 regression tests and release graphics Clippy pass locally; native Windows/Linux run [41201979259](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41201979259) passed 108 tests per platform, graphics checks, linking and packaging.
+
+## Sustained comparison
+
+Two 600-second runs used the same executable and verified 3600×2160 window. Reference mode retains sphere retirement and per-event procedural hull generation; candidate mode uses cached camera planes, rotated box retirement and immutable source hulls. Both retain all partially visible bounding geometry and have a 20-second final drain. The normal game does not activate this test mode.
+
+| Clean-window metric | Reference | Optimized |
+| --- | ---: | ---: |
+| Early frame mean |18.098ms|18.176ms|
+| Late frame mean |18.080ms|18.047ms|
+| Early debris update CPU |16.79µs|12.37µs|
+| Late debris update CPU |20.47µs|14.28µs|
+| Late CPU mesh building |24.44µs|26.50µs|
+| Final live debris bodies |0|0|
+| Final mesh/material/entity assets |15/11/949|15/11/949|
+
+Late debris-update CPU cost fell about 30%; total frame pacing was essentially unchanged. Do not interpret the routine-level improvement as a 30% game-FPS gain. An independent 192-request ray/contact/fracture benchmark fell 66.932→34.211ms (~49%), with identical contacts, chunk order, cells/colors, pivots and heat. Rendering mesh rebuild CPU was a small fraction of frame time; the measurements did not justify replacing the renderer or adding complex GPU geometry machinery.
+
+The candidate had no retained offscreen box in any sampled clean window; reference mode retained up to 14. Both modes released debris, meshes and entities back to their exact starting counts after the drain. No cumulative resource leak or progressive frame collapse was reproduced in this scenario. Later-wave workload and the original symptom on other sessions/hardware remain practical limits of this test.
+
+Native Metal traces were taken early and late. Profiler/finalization windows 230–320s and 545–610s are excluded from clean frame/CPU comparisons. Late GPU busy samples were 5.302ms reference and 5.579ms candidate; no GPU-speed improvement is claimed. GPU allocation baselines differed but remained stable within each run. Process RSS also stayed bounded; lower total memory consumption is not claimed. No thermal warning was reported, which does not independently prove constant clock speeds. The high-resolution windowed test has display/compositor pacing and is not directly comparable with earlier fullscreen/1080p FPS results.
+
+After manual Mac unlock, the foreground v0.4.4 renderer replay passed gameplay, appearance, resize and normal Quit checks: 1,020 physical 1080p frames averaged 8.334 ms / p95 8.923 ms (about 120 FPS on this M5). Earlier locked/background results were not foreground performance evidence. No whole-game FPS increase is claimed. Prior visual/gameplay fixes remain required. Windows/Linux graphical gameplay is not covered by native build/archive checks.
+
+## v0.4.4 release artifacts
+
+Native Windows/Linux build and package validation: [run 41201979259](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41201979259). Windows x64 has 254 files and 253 internal checksums; Linux x64 has 255 files and 254 internal checksums. Architecture, executable modes, source notices, safe paths and incorporated audio checks pass. Graphical gameplay on Windows/Linux remains untested.
+
+Mac build 20 is Developer ID signed, notarized, stapled and Gatekeeper-accepted. App receipt `2be4fa33-78f2-4259-9dcb-cf7d358b2729`; DMG receipt `49fa8c37-04ee-4f93-9e8a-993fbca6c315`. A read-only mounted copy matches the tested signed executable. The same verified build 20 is installed; movement, firing, pause, localized app title and retained visuals were checked after the manual unlock. DMG SHA-256: `8bc0246279fc017eb2eb2b5675acaf509c56d63a2b63b9985d851e0706df3e85`. Seven release assets include each archive, its checksum and aggregate SHA256SUMS.txt. Actual v0.4.4 screenshots were refreshed from the unlocked native replay; no AI imagery or content retouching was used.
+
+## Historical v0.4.3 validation
+
 # Desktop release validation · v0.4.3
 
 Mac build 19, verified 31-Oct-2026. All 100 pure regression tests, formatting and release graphics Clippy pass locally. Tests reproduce the former depth misses and life-loss X reset, compare projected occupied-voxel collision against an independent convex-hull reference, and check both complete Galactica hulls across desktop, Retina, tall and ultrawide views.

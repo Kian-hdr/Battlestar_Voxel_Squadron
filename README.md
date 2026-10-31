@@ -8,11 +8,11 @@ A native Rust arcade game with 3D voxel ships by **Kian Konrad Tajbakhsh**. Fly 
 
 Get the desktop packages from [GitHub Releases](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases). This is an early playable fan prototype.
 
-- **[macOS DMG, Apple Silicon](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.3/Battlestar_Voxel_Squadron_v0.4.3_macOS_Apple_Silicon.dmg):** open the DMG, drag `Battlestar_Voxel_Squadron.app` to Applications, then launch it.
-- **[Windows ZIP, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.3/Battlestar_Voxel_Squadron_v0.4.3_Windows_x86_64.zip):** extract the ZIP and run `Battlestar_Voxel_Squadron.exe`.
-- **[Linux archive, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.3/Battlestar_Voxel_Squadron_v0.4.3_Linux_x86_64.tar.gz):** extract the archive, install the runtime libraries listed in its README, and run `./Battlestar_Voxel_Squadron` in a graphical session with a Vulkan driver.
+- **[macOS DMG, Apple Silicon](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_macOS_Apple_Silicon.dmg):** open the DMG, drag `Battlestar_Voxel_Squadron.app` to Applications, then launch it.
+- **[Windows ZIP, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Windows_x86_64.zip):** extract the ZIP and run `Battlestar_Voxel_Squadron.exe`.
+- **[Linux archive, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Linux_x86_64.tar.gz):** extract the archive, install the runtime libraries listed in its README, and run `./Battlestar_Voxel_Squadron` in a graphical session with a Vulkan driver.
 
-v0.4.3 fixes strict 2D projectile hits and Viper position jumps, restores full Galactica framing, adds flowing voxel exhaust and fast straight-flight debris, and preserves the proper app display name and menu Quit Game. See [release notes](docs/Release_Notes.md).
+v0.4.4 tightens offscreen debris cleanup and reuses cached ship geometry to reduce destruction CPU work. Two matched ten-minute runs verify bounded resources and preserve the existing combat, exhaust, Galactica framing and app-name fixes. See [release notes](docs/Release_Notes.md).
 
 No account, server or internet connection is needed to play. [Validation notes](docs/Release_Validation.md) state which platforms were build-tested and which were played. Windows binaries are unsigned; SmartScreen may show an unknown-publisher warning.
 
