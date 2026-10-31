@@ -10,6 +10,7 @@ use battlestar_voxel::{
 };
 use bevy::{
     asset::RenderAssetUsages,
+    camera::ScalingMode,
     core_pipeline::tonemapping::Tonemapping,
     mesh::{Indices, PrimitiveTopology},
     post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter},
@@ -22,6 +23,9 @@ use std::collections::{BTreeMap, BTreeSet};
 mod menu;
 #[path = "shatter_render.rs"]
 mod shatter;
+
+pub(super) const PLAYER_LAYER: f32 = 4.;
+const SHOT_LAYER: f32 = 6.;
 
 pub struct PresentationPlugin;
 impl Plugin for PresentationPlugin {
@@ -119,6 +123,9 @@ struct Smoke {
     pause_probed: bool,
     restart_probed: bool,
     expected_cleanup_run: u64,
+    pose_probed: bool,
+    hit_probe_x: f32,
+    hit_probe_time: f32,
 }
 fn mesh(v: voxel::Voxels, unit: f32) -> Mesh {
     let g = v.mesh(unit);
@@ -189,11 +196,13 @@ fn setup(
             composite_mode: BloomCompositeMode::Additive,
             ..Bloom::NATURAL
         },
-        Projection::Perspective(PerspectiveProjection {
-            fov: 0.72,
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::FixedVertical {
+                viewport_height: 17.5,
+            },
             near: 0.1,
             far: 200.,
-            ..default()
+            ..OrthographicProjection::default_3d()
         }),
         Transform::from_xyz(0., -25., 28.).looking_at(Vec3::new(0., -1.5, 0.), Vec3::Y),
     ));
@@ -218,7 +227,17 @@ fn setup(
     });
     let cyan = emitting(&mut materials, Color::srgb(0.32, 0.88, 1.));
     let red = emitting(&mut materials, Color::srgb(1., 0.22, 0.11));
-    let shot = meshes.add(mesh(voxel::projectile(), voxel::UNIT));
+    let mut shot_mesh = mesh(voxel::projectile(), voxel::UNIT);
+    if let Some(bevy::mesh::VertexAttributeValues::Float32x3(positions)) =
+        shot_mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for p in positions {
+            p[0] -= voxel::UNIT * 0.5;
+            p[1] -= voxel::UNIT * 3.;
+            p[2] -= voxel::UNIT * 0.5;
+        }
+    }
+    let shot = meshes.add(shot_mesh);
     let engine_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         unlit: true,
@@ -483,6 +502,30 @@ fn tick(
     }
 }
 
+fn projectile_transform(shot: &battlestar_voxel::simulation::Shot) -> Transform {
+    let forward = battlestar_voxel::combat_plane::view_forward();
+    let velocity = Vec3::new(shot.velocity.x, shot.velocity.y, 0.);
+    let velocity = if velocity.length_squared() > 1e-10 {
+        velocity
+    } else {
+        Vec3::Y
+    };
+    let screen_velocity = velocity - forward * velocity.dot(forward);
+    let y = screen_velocity.normalize();
+    let z = -forward;
+    let x = y.cross(z).normalize();
+    Transform::from_translation(battlestar_voxel::combat_plane::visual_position(
+        Vec2::new(shot.pos.x, shot.pos.y),
+        SHOT_LAYER,
+    ))
+    .with_rotation(Quat::from_mat3(&Mat3::from_cols(x, y, z)))
+    .with_scale(Vec3::new(
+        1.,
+        screen_velocity.length() / velocity.length(),
+        1.,
+    ))
+}
+
 fn sync_visuals(
     mut commands: Commands,
     session: Res<Session>,
@@ -493,7 +536,10 @@ fn sync_visuals(
 ) {
     let g = &session.0;
     let (t, v) = &mut *player;
-    t.translation = Vec3::new(g.player.x, g.player.y, 0.);
+    t.translation = battlestar_voxel::combat_plane::visual_position(
+        Vec2::new(g.player.x, g.player.y),
+        PLAYER_LAYER,
+    );
     t.rotation = Quat::from_array(g.player_rotation);
     let visibility = if g.phase == Phase::GameOver {
         Visibility::Hidden
@@ -512,7 +558,10 @@ fn sync_visuals(
     });
     for e in &g.enemies {
         let rotation = Quat::from_array(e.rotation);
-        let transform = Transform::from_xyz(e.pos.x, e.pos.y, e.depth).with_rotation(rotation);
+        let transform = Transform::from_translation(
+            battlestar_voxel::combat_plane::visual_position(Vec2::new(e.pos.x, e.pos.y), e.depth),
+        )
+        .with_rotation(rotation);
         if let Some(entity) = fleet.enemies.get(&e.id) {
             if let Ok(mut t) = transforms.get_mut(*entity) {
                 t.translation = transform.translation;
@@ -566,13 +615,9 @@ fn sync_visuals(
         }
     });
     for s in &g.shots {
-        let direction = Vec3::new(s.velocity.x, s.velocity.y, s.velocity_z);
-        let rotation = if direction.length_squared() > 1e-10 {
-            Quat::from_rotation_arc(Vec3::Y, direction.normalize())
-        } else {
-            Quat::IDENTITY
-        };
-        let transform = Transform::from_xyz(s.pos.x, s.pos.y, s.depth).with_rotation(rotation);
+        // The leading face is anchored to the exact 2D collision point, and
+        // thickness lies along the viewing axis rather than above/below a hull.
+        let transform = projectile_transform(s);
         if let Some(entity) = fleet.shots.get(&s.id) {
             if let Ok(mut t) = transforms.get_mut(*entity) {
                 *t = transform;
@@ -676,13 +721,29 @@ fn audit_projectile_colors(
     session: Res<Session>,
     art: Res<Art>,
     fleet: Res<FleetVisuals>,
-    meshes: Query<(Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>)>,
+    meshes: Query<(
+        Entity,
+        &Mesh3d,
+        &MeshMaterial3d<StandardMaterial>,
+        &Transform,
+    )>,
     mut stats: ResMut<FrameStats>,
 ) {
     if !smoke.enabled {
         return;
     }
-    for (entity, mesh, material) in &meshes {
+    for enemy in &session.0.enemies {
+        if let Some(entity) = fleet.enemies.get(&enemy.id)
+            && let Ok((_, _, _, transform)) = meshes.get(*entity)
+        {
+            let projected = battlestar_voxel::combat_plane::project_offset(transform.translation);
+            assert!(
+                projected.distance(Vec2::new(enemy.pos.x, enemy.pos.y)) < 0.0001,
+                "cosmetic ship depth must not move its 2D target"
+            );
+        }
+    }
+    for (entity, mesh, material, transform) in &meshes {
         if mesh.0 != art.shot {
             continue;
         }
@@ -697,6 +758,20 @@ fn audit_projectile_colors(
             &material.0, expected,
             "projectiles must keep their side's color through contact"
         );
+        let projected = battlestar_voxel::combat_plane::project_offset(transform.translation);
+        assert!(
+            projected.distance(Vec2::new(shot.pos.x, shot.pos.y)) < 0.0001,
+            "drawn projectile must share the logical 2D hit plane"
+        );
+        for z in [-voxel::UNIT * 0.5, voxel::UNIT * 0.5] {
+            let tip = transform.transform_point(Vec3::new(0., 0., z));
+            assert!(
+                battlestar_voxel::combat_plane::project_offset(tip)
+                    .distance(Vec2::new(shot.pos.x, shot.pos.y))
+                    < 0.0001,
+                "visible beam tip/thickness must align with its 2D contact point"
+            );
+        }
         stats.projectile_color_checks += 1;
     }
 }
@@ -740,6 +815,7 @@ fn smoke_test(
     player: Single<&Visibility, With<Player>>,
     mut menu_buttons: Query<(&menu::Action, &mut Interaction, &ComputedNode)>,
     menu_root: Single<&Visibility, With<menu::MenuRoot>>,
+    camera_projection: Single<&Projection, With<Camera3d>>,
 ) {
     stats.frames += 1;
     if time.elapsed_secs() > 5. && stats.samples.len() < 10000 {
@@ -756,6 +832,10 @@ fn smoke_test(
         return;
     }
     let now = time.elapsed_secs();
+    assert!(
+        matches!(&**camera_projection, Projection::Orthographic(_)),
+        "arcade hit projection must not have depth parallax"
+    );
     if session.0.phase == Phase::Playing {
         assert_eq!(
             **player,
@@ -803,6 +883,15 @@ fn smoke_test(
         }
         2 => {
             g.invulnerable = 10.;
+            if !smoke.pose_probed && g.elapsed > 0.2 && g.player.x.abs() > 0.5 {
+                smoke.hit_probe_x = g.player.x;
+                smoke.hit_probe_time = now;
+                g.invulnerable = 0.;
+                g.lives = 3;
+                g.inject_shot(g.player, false);
+                smoke.stage = 12;
+                return;
+            }
             if !smoke.pause_probed && shatters.active_cubes() > 0 {
                 smoke.paused_shatter_time = shatters.motion_time();
                 g.toggle_pause();
@@ -840,6 +929,23 @@ fn smoke_test(
                 smoke.paused_shatter_time = shatters.motion_time();
                 smoke.started = now;
                 smoke.stage = 3;
+            }
+        }
+        12 => {
+            assert!(
+                now - smoke.hit_probe_time < 0.5,
+                "nonfatal hit probe must contact the Viper"
+            );
+            if g.lives == 2 {
+                assert!(
+                    (g.player.x - smoke.hit_probe_x).abs()
+                        <= 13. * (now - smoke.hit_probe_time) + 0.02,
+                    "life loss must not teleport the visible Viper"
+                );
+                smoke.pose_probed = true;
+                g.invulnerable = 10.;
+                smoke.stage = 2;
+                info!("SMOKE nonfatal life-loss position continuity verified");
             }
         }
         20 if now - smoke.started > 0.4 => {
@@ -1011,6 +1117,10 @@ fn smoke_test(
                 "debris must retire after leaving the viewport"
             );
             assert!(
+                smoke.pose_probed,
+                "nonfatal pose continuity must be exercised"
+            );
+            assert!(
                 stats.projectile_color_checks > 0,
                 "actual projectile colors must be exercised"
             );
@@ -1151,6 +1261,8 @@ fn smoke_test(
                     shatters.split_impulse_events,
                     shatters.max_split_velocity_delta
                 );
+            let report = report.trim_end().trim_end_matches('}').to_owned()
+                + ",\"strict_2d_projection\":true,\"nonfatal_pose_continuity\":true}\n";
             std::fs::write(std::path::Path::new(&dir).join("Smoke_Result.json"), report)
                 .expect("write smoke result");
             info!("SMOKE complete");
@@ -1211,13 +1323,17 @@ fn sync_era(
 }
 
 fn fit_camera(window: Single<&Window>, mut projection: Single<&mut Projection, With<Camera3d>>) {
-    let aspect = window.physical_width() as f32 / window.physical_height().max(1) as f32;
-    let fov = battlestar_voxel::viewport::battle_fov(aspect);
-    if let Projection::Perspective(p) = &**projection
-        && p.fov != fov
-        && let Projection::Perspective(p) = &mut **projection
-    {
-        p.fov = fov;
+    let aspect = window.physical_width().max(1) as f32 / window.physical_height().max(1) as f32;
+    let height = 17.5_f32.max(26. / aspect);
+    let needs_update = match &**projection {
+        Projection::Orthographic(p) => !matches!(p.scaling_mode,
+            ScalingMode::FixedVertical { viewport_height } if viewport_height == height),
+        _ => false,
+    };
+    if needs_update && let Projection::Orthographic(p) = &mut **projection {
+        p.scaling_mode = ScalingMode::FixedVertical {
+            viewport_height: height,
+        };
     }
 }
 

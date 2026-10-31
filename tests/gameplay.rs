@@ -331,11 +331,14 @@ fn each_unprotected_hit_consumes_one_fighter_until_reserves_are_exhausted() {
         g.invulnerable = 0.;
         g.player.x = 4.;
         g.velocity_x = 6.;
+        let mut uninterrupted = g.clone();
+        uninterrupted.shots.clear();
+        uninterrupted.step(Input::default(), DT);
         g.inject_shot(g.player, false);
         g.step(Input::default(), DT);
         assert_eq!(g.lives, remaining);
-        assert_eq!(g.player, Point { x: 0., y: PLAYER_Y });
-        assert_eq!(g.velocity_x, 0.);
+        assert_eq!(g.player, uninterrupted.player);
+        assert_eq!(g.velocity_x, uninterrupted.velocity_x);
         assert!(g.invulnerable > 2.);
         assert!(
             g.events
@@ -488,13 +491,20 @@ fn projectile_in_empty_hull_cell_does_not_score_a_fake_circle_hit() {
     e.rotation = glam::Quat::IDENTITY.to_array();
     e.mode = EnemyMode::Formation;
     let hull = raider(true);
-    let empty = (-5_i32..5)
-        .flat_map(|x| (-5_i32..5).map(move |y| [x, y, 1]))
+    let empty = (-12_i32..12)
+        .flat_map(|x| (-12_i32..12).map(move |y| [x, y]))
         .find(|p| {
-            !hull.0.contains_key(p)
-                && ((p[0] as f32 + 0.5) * UNIT).hypot((p[1] as f32 + 0.5) * UNIT) < 0.7
+            let point = glam::Vec2::new((p[0] as f32 + 0.5) * UNIT, (p[1] as f32 + 0.5) * UNIT);
+            point.length() < 1.3
+                && battlestar_voxel::combat_plane::segment_hit(
+                    &hull,
+                    point,
+                    point,
+                    glam::Quat::IDENTITY,
+                )
+                .is_none()
         })
-        .expect("classic silhouette has empty space inside old hit circle");
+        .expect("projected silhouette has empty space inside its broad-phase circle");
     g.inject_shot(
         Point {
             x: next_x + (empty[0] as f32 + 0.5) * UNIT,
@@ -542,6 +552,6 @@ fn player_damage_keeps_pre_respawn_pose_contact_and_momentum() {
         assert_ne!(*rotation, glam::Quat::IDENTITY.to_array());
         assert!(shot_velocity.y < 0.);
     }
-    assert_eq!(g.velocity_x, 0.);
+    assert!(g.velocity_x > 0.);
     assert_eq!(g.lives, 2);
 }

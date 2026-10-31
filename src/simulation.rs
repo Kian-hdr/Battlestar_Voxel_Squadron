@@ -70,7 +70,7 @@ pub struct Shot {
     pub depth: f32,
     pub previous_depth: f32,
     pub velocity_z: f32,
-    /// Stable depth-only fire-control target; horizontal aim stays player-owned.
+    /// Legacy metadata only. Arcade projectiles do not lock or home in depth.
     pub target_id: Option<u64>,
     pub friendly: bool,
     pub ttl: f32,
@@ -222,11 +222,6 @@ impl Game {
     }
     pub fn inject_shot(&mut self, pos: Point, friendly: bool) {
         let id = self.id();
-        let target_id = if friendly {
-            friendly_depth_target(pos, None, &self.enemies).map(|e| e.id)
-        } else {
-            None
-        };
         self.shots.push(Shot {
             id,
             pos,
@@ -238,7 +233,7 @@ impl Game {
             depth: 0.15,
             previous_depth: 0.15,
             velocity_z: 0.,
-            target_id,
+            target_id: None,
             friendly,
             ttl: 4.,
         });
@@ -260,8 +255,7 @@ impl Game {
             rotation: self.player_rotation,
         });
         self.invulnerable = 2.5;
-        self.player = Point { x: 0., y: PLAYER_Y };
-        self.velocity_x = 0.;
+        // Protection preserves the visible fighter's current pose and momentum.
         self.shots.retain(|s| s.friendly);
         if self.lives == 0 {
             self.phase = Phase::GameOver;
@@ -431,37 +425,20 @@ impl Game {
                 .map(|e| (e.pos, e.depth))
                 .collect();
             if !candidates.is_empty() {
-                let (p, depth) = candidates[self.pick(candidates.len())];
+                let (p, _) = candidates[self.pick(candidates.len())];
                 self.inject_shot(p, false);
                 let s = self.shots.last_mut().unwrap();
                 let dx = (self.player.x - p.x).clamp(-5., 5.);
                 s.velocity.x = dx * 0.6;
-                s.depth = depth + 0.15;
-                s.previous_depth = s.depth;
-                let flight_time = ((self.player.y - p.y) / s.velocity.y).max(0.1);
-                s.velocity_z = (0.15 - s.depth) / flight_time;
                 self.events.push(Event::Shot(false));
             }
             self.fire_timer = cfg.fire_interval;
         }
         for s in &mut self.shots {
-            let target = if s.friendly {
-                friendly_depth_target(s.pos, s.target_id, &self.enemies)
-            } else {
-                None
-            };
-            s.target_id = target.map(|e| e.id);
-            if let Some(enemy) = target {
-                // Continuous depth-only intercept steering preserves the original
-                // screen-space aim, trajectory and occupied-voxel hit test.
-                let closing = (s.velocity.y - enemy.velocity.y).max(2.);
-                let remaining = ((enemy.pos.y - s.pos.y) / closing).clamp(0.04, 3.);
-                let predicted = (enemy.depth + enemy.velocity_z * remaining.min(0.2))
-                    .clamp(-MAX_ENEMY_DEPTH, MAX_ENEMY_DEPTH)
-                    + 0.15;
-                let desired = ((predicted - s.depth) / remaining).clamp(-18., 18.);
-                s.velocity_z += (desired - s.velocity_z).clamp(-160. * dt, 160. * dt);
-            }
+            // Combat is strictly 2D. Height remains cosmetic and cannot steer
+            // a projectile around an on-screen silhouette or choose its target.
+            s.target_id = None;
+            s.velocity_z = 0.;
             s.previous = s.pos;
             s.previous_depth = s.depth;
             s.pos.x += s.velocity.x * dt;
@@ -531,7 +508,6 @@ impl Game {
                 && s.pos.y.abs() < 17.
                 && s.pos.x.abs() < 15.
                 && s.depth.is_finite()
-                && s.depth.abs() < 32.
                 && !consumed.contains(&s.id)
         });
         if let Some((impact, momentum)) = player_hit {
@@ -545,27 +521,6 @@ impl Game {
         }
     }
 }
-// Keep a valid depth lock stable, but acquire targets that enter the player's
-// unchanged firing lane after launch. A departed/dead target cannot leave a shot
-// permanently steering toward an unrelated depth. Exact voxel contact still
-// decides every hit; this corridor only selects depth assistance.
-fn friendly_depth_target(pos: Point, locked: Option<u64>, enemies: &[Enemy]) -> Option<&Enemy> {
-    let aligned = |e: &&Enemy| {
-        let extent = enemy_half_extents(e);
-        e.pos.y + extent[1] > pos.y && (e.pos.x - pos.x).abs() <= extent[0]
-    };
-    enemies
-        .iter()
-        .find(|e| Some(e.id) == locked && aligned(e))
-        .or_else(|| {
-            enemies.iter().filter(aligned).min_by(|a, b| {
-                (a.pos.y - pos.y)
-                    .total_cmp(&(b.pos.y - pos.y))
-                    .then(a.id.cmp(&b.id))
-            })
-        })
-}
-
 /// Conservative actual-model extents around the shared model origin, transformed
 /// into world axes using the same rigid rotation as contact tests and rendering.
 pub fn enemy_half_extents(enemy: &Enemy) -> [f32; 3] {
@@ -1060,28 +1015,19 @@ fn hull_model(classic: bool, player: bool) -> &'static crate::voxel::Voxels {
 fn occupied_model_contact(
     shot: &Shot,
     pos: Point,
-    depth: f32,
+    _cosmetic_depth: f32,
     rotation: [f32; 4],
     model: &crate::voxel::Voxels,
 ) -> Option<Point> {
-    use glam::{Quat, Vec3};
-    // Cheap conservative broad phase; exact occupied-cell slabs decide the hit.
+    use glam::{Quat, Vec2};
+    // Conservative screen-plane prune only; occupied projected cells decide hits.
     if !segment_hits(shot.previous, shot.pos, pos, 3.) {
         return None;
     }
-    let rotation = Quat::from_array(rotation);
-    let inverse = rotation.inverse();
-    let origin = Vec3::new(pos.x, pos.y, depth);
-    let a = inverse * (Vec3::new(shot.previous.x, shot.previous.y, shot.previous_depth) - origin);
-    let b = inverse * (Vec3::new(shot.pos.x, shot.pos.y, shot.depth) - origin);
-    let hit = Vec3::from_array(crate::voxel_damage::segment_hit(
-        model,
-        a.to_array(),
-        b.to_array(),
-    )?);
-    let world = origin + rotation * hit;
-    Some(Point {
-        x: world.x,
-        y: world.y,
-    })
+    let origin = Vec2::new(pos.x, pos.y);
+    let start = Vec2::new(shot.previous.x, shot.previous.y) - origin;
+    let end = Vec2::new(shot.pos.x, shot.pos.y) - origin;
+    let hit =
+        origin + crate::combat_plane::segment_hit(model, start, end, Quat::from_array(rotation))?;
+    Some(Point { x: hit.x, y: hit.y })
 }

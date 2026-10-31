@@ -130,26 +130,22 @@ fn full_fleet_starts_spaced_and_stays_finite_separate_and_continuous() {
 }
 
 #[test]
-fn shots_obey_actual_enemy_depth_and_events_keep_vertical_motion() {
-    let mut g = pair(EnemyMode::Formation);
-    g.enemies.truncate(1);
-    g.enemies[0].home = Point { x: 0., y: 4. };
-    g.enemies[0].pos = Point { x: 0., y: 4. };
-    g.enemies[0].depth = 2.;
-    g.inject_shot(g.enemies[0].pos, true);
-    g.step(Input::default(), DT);
-    assert_eq!(g.score, 0);
-    g.shots.clear();
-    g.enemies[0].depth = 0.;
-    g.enemies[0].rotation = glam::Quat::IDENTITY.to_array();
-    g.inject_shot(g.enemies[0].pos, true);
-    g.step(Input::default(), DT);
-    assert_eq!(g.score, 100);
-    assert!(g.events.iter().any(|e|matches!(e,Event::EnemyDestroyed{depth,velocity_z,..} if depth.is_finite()&&velocity_z.is_finite())));
+fn visible_enemy_silhouettes_ignore_cosmetic_depth_and_events_keep_vertical_motion() {
+    for depth in [-2., 0., 2.] {
+        let mut g = pair(EnemyMode::Formation);
+        g.enemies.truncate(1);
+        g.enemies[0].home = Point { x: 0., y: 4. };
+        g.enemies[0].pos = Point { x: 0., y: 4. };
+        g.enemies[0].depth = depth;
+        g.inject_shot(g.enemies[0].pos, true);
+        g.step(Input::default(), DT);
+        assert_eq!(g.score, 100);
+        assert!(g.events.iter().any(|e| matches!(e, Event::EnemyDestroyed { depth, velocity_z, .. } if depth.is_finite() && velocity_z.is_finite())));
+    }
 }
 
 #[test]
-fn hostile_shots_start_at_raider_height_and_aim_back_to_player_plane() {
+fn hostile_shots_keep_flat_arcade_trajectories_despite_raider_height() {
     let mut g = pair(EnemyMode::Formation);
     g.enemies.truncate(1);
     let mut observed = false;
@@ -157,51 +153,43 @@ fn hostile_shots_start_at_raider_height_and_aim_back_to_player_plane() {
         g.enemies[0].depth = 2.;
         g.step(Input::default(), DT);
         if let Some(shot) = g.shots.iter().find(|s| !s.friendly) {
-            assert!((shot.previous_depth - g.enemies[0].depth - 0.15).abs() < 1e-5);
-            assert!(shot.velocity_z < 0.);
-            assert!((shot.depth - shot.previous_depth - shot.velocity_z * DT).abs() < 1e-5);
-            let flight_time = (g.player.y - shot.previous.y) / shot.velocity.y;
-            assert!((shot.previous_depth + shot.velocity_z * flight_time - 0.15).abs() < 1e-5);
+            assert_eq!(shot.depth, 0.15);
+            assert_eq!(shot.previous_depth, 0.15);
+            assert_eq!(shot.velocity_z, 0.);
             observed = true;
             break;
         }
     }
     assert!(
         observed,
-        "normal enemy firing must exercise the depth-aware shot path"
+        "normal enemy fire must exercise the flat shot path"
     );
 }
 
 #[test]
-fn fast_depth_axis_shots_sweep_actual_player_hull_without_tunneling() {
-    let mut g = Game::default();
-    g.start();
-    g.enemies.clear();
-    g.invulnerable = 0.;
-    g.inject_shot(g.player, false);
-    let shot = g.shots.last_mut().unwrap();
-    shot.velocity = Point::default();
-    shot.depth = 3.;
-    shot.previous_depth = 3.;
-    g.step(Input::default(), DT);
-    assert_eq!(g.lives, 3, "projected XY overlap alone is not a hit");
-    g.shots.clear();
-    g.inject_shot(g.player, false);
-    let shot = g.shots.last_mut().unwrap();
-    shot.velocity = Point::default();
-    shot.depth = 3.;
-    shot.previous_depth = 3.;
-    shot.velocity_z = -720.;
-    g.step(Input::default(), DT);
-    assert_eq!(
-        g.lives, 2,
-        "swept Z path passes through occupied player voxels"
-    );
-    assert!(
-        g.events
-            .iter()
-            .any(|e| matches!(e, Event::PlayerDestroyed { .. }))
-    );
+fn hostile_cosmetic_height_cannot_evade_an_overlapping_player_silhouette() {
+    for depth in [-12., 0.15, 12.] {
+        let mut g = Game::default();
+        g.start();
+        g.enemies.clear();
+        g.invulnerable = 0.;
+        g.inject_shot(g.player, false);
+        let shot = g.shots.last_mut().unwrap();
+        shot.velocity = Point::default();
+        shot.depth = depth;
+        shot.previous_depth = depth;
+        shot.velocity_z = -720.;
+        g.step(Input::default(), DT);
+        assert_eq!(
+            g.lives, 2,
+            "visible overlap must hit regardless of cosmetic Z"
+        );
+        assert!(
+            g.events
+                .iter()
+                .any(|e| matches!(e, Event::PlayerDestroyed { .. }))
+        );
+    }
 }
 
 #[test]
@@ -242,11 +230,10 @@ fn aim_fixture(classic: bool, depth: f32) -> Game {
 }
 
 #[test]
-fn depth_only_fire_control_hits_both_eras_at_positive_and_negative_cinematic_height() {
+fn flat_fire_hits_both_eras_at_positive_and_negative_cosmetic_height() {
     for classic in [false, true] {
         for depth in [-2.4, 2.4] {
             let mut g = aim_fixture(classic, depth);
-            let enemy_id = g.enemies[0].id;
             g.step(
                 Input {
                     axis: 0.,
@@ -257,7 +244,7 @@ fn depth_only_fire_control_hits_both_eras_at_positive_and_negative_cinematic_hei
             let shot = g.shots.iter().find(|s| s.friendly).unwrap();
             let shot_id = shot.id;
             let initial_x = shot.pos.x;
-            assert_eq!(shot.target_id, Some(enemy_id));
+            assert_eq!(shot.target_id, None);
             for _ in 0..160 {
                 for s in g.shots.iter().filter(|s| s.id == shot_id) {
                     assert_eq!(
@@ -287,7 +274,7 @@ fn depth_only_fire_control_hits_both_eras_at_positive_and_negative_cinematic_hei
 }
 
 #[test]
-fn depth_tracking_follows_a_lifting_target_without_changing_xy_aim() {
+fn lifting_targets_do_not_change_flat_projectile_trajectories() {
     for classic in [false, true] {
         let mut g = aim_fixture(classic, 0.);
         g.step(

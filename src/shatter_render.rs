@@ -1,6 +1,7 @@
 //! Destructible occupied voxel bodies. Meshes are derived surfaces, never the damage source.
 use crate::Session;
 use battlestar_voxel::{
+    combat_plane::{visual_position, visual_velocity},
     simulation::{Phase, Point},
     viewport::{
         DebrisMotion, advance_debris, background_overlap_exit, contact_departure_velocity,
@@ -12,7 +13,7 @@ use battlestar_voxel::{
 };
 use bevy::{
     asset::RenderAssetUsages,
-    camera::visibility::NoFrustumCulling,
+    camera::{ScalingMode, visibility::NoFrustumCulling},
     mesh::{Indices, PrimitiveTopology, VertexAttributeValues},
     prelude::*,
 };
@@ -343,10 +344,14 @@ fn targets(session: &Session, galactica: &Transform, dt: f32) -> Vec<Target> {
     let models = hull_models();
     let mut result = Vec::with_capacity(session.0.enemies.len() + 2);
     for enemy in &session.0.enemies {
-        let velocity = Vec3::new(enemy.velocity.x, enemy.velocity.y, enemy.velocity_z);
+        let velocity = visual_velocity(
+            Vec2::new(enemy.velocity.x, enemy.velocity.y),
+            enemy.velocity_z,
+        );
         result.push(Target {
             model: &models[2 + usize::from(enemy.classic)],
-            position: Vec3::new(enemy.pos.x, enemy.pos.y, enemy.depth) - velocity * dt,
+            position: visual_position(Vec2::new(enemy.pos.x, enemy.pos.y), enemy.depth)
+                - velocity * dt,
             rotation: Quat::from_array(enemy.rotation),
             scale: Vec3::ONE,
             velocity,
@@ -356,7 +361,10 @@ fn targets(session: &Session, galactica: &Transform, dt: f32) -> Vec<Target> {
         let velocity = Vec3::new(session.0.velocity_x, 0., 0.);
         result.push(Target {
             model: &models[usize::from(session.0.wave < 4)],
-            position: Vec3::new(session.0.player.x, session.0.player.y, 0.) - velocity * dt,
+            position: visual_position(
+                Vec2::new(session.0.player.x, session.0.player.y),
+                super::PLAYER_LAYER,
+            ) - velocity * dt,
             rotation: Quat::from_array(session.0.player_rotation),
             scale: Vec3::ONE,
             velocity,
@@ -533,15 +541,21 @@ pub(super) fn update(
     }
     let dt = time.delta_secs();
     let (camera_transform, projection) = *camera;
-    let Projection::Perspective(p) = projection else {
-        return;
-    };
-    let aspect = window.physical_width() as f32 / window.physical_height().max(1) as f32;
+    let aspect = window.physical_width().max(1) as f32 / window.physical_height().max(1) as f32;
     let fov = battlestar_voxel::viewport::battle_fov(aspect);
-    // Bevy uses an infinite reverse-Z projection. A synthetic finite far plane
-    // would remove still-visible debris from these uncullable batched meshes.
-    let clip = Mat4::perspective_infinite_reverse_rh(fov, aspect, p.near)
-        * camera_transform.to_matrix().inverse();
+    // Recreate the current window's actual projection before fixed-step retirement,
+    // including a resize that the camera system will apply later this frame.
+    let mut actual = (*projection).clone();
+    if let Projection::Orthographic(p) = &mut actual {
+        p.scaling_mode = ScalingMode::FixedVertical {
+            viewport_height: 17.5_f32.max(26. / aspect),
+        };
+    }
+    actual.update(
+        window.physical_width().max(1) as f32,
+        window.physical_height().max(1) as f32,
+    );
+    let clip = actual.get_clip_from_view() * camera_transform.to_matrix().inverse();
     let camera_forward = *camera_transform.forward();
     // A conservative corner cone makes a launch/contact departure clear the
     // current view without any later acceleration or steering.
@@ -700,22 +714,19 @@ pub(super) fn update(
         } else {
             voxel::raider(request.classic)
         };
-        let local_contact = inverse
-            * Vec3::new(
-                request.impact.x - request.pos.x,
-                request.impact.y - request.pos.y,
-                0.15 - request.depth,
-            );
+        let origin = visual_position(Vec2::new(request.pos.x, request.pos.y), request.depth);
+        let logical_contact =
+            visual_position(Vec2::new(request.impact.x, request.impact.y), request.depth);
+        let local_contact = inverse * (logical_contact - origin);
         let forward =
             Vec3::new(request.shot_velocity.x, request.shot_velocity.y, 0.).normalize_or_zero();
-        let local_forward = inverse * forward;
-        // Find an actual occupied surface along the shot; near-edge collision tolerance
-        // falls back to the nearest occupied material cell rather than inventing particles.
-        let ray_origin = local_contact - local_forward * 4.;
-        let contact =
-            voxel_damage::ray_hit(&model, ray_origin.to_array(), local_forward.to_array())
-                .map(Vec3::from_array)
-                .unwrap_or(local_contact);
+        // A 2D hit identifies the visible silhouette. Recover its actual occupied
+        // surface along the viewing ray for local heat/fracture placement.
+        let local_ray = inverse * camera_forward;
+        let ray_origin = local_contact - local_ray * 8.;
+        let contact = voxel_damage::ray_hit(&model, ray_origin.to_array(), local_ray.to_array())
+            .map(Vec3::from_array)
+            .unwrap_or(local_contact);
         let chunks = fracture(
             &model,
             contact.to_array(),
@@ -726,7 +737,6 @@ pub(super) fn update(
             continue;
         }
         debug_assert_eq!(cubes, model.0.len());
-        let origin = Vec3::new(request.pos.x, request.pos.y, request.depth);
         let mut bodies = Vec::with_capacity(chunks.len());
         for (k, chunk) in chunks.into_iter().enumerate() {
             let seed = request.id.wrapping_mul(131).wrapping_add(k as u64);
@@ -735,7 +745,10 @@ pub(super) fn update(
             let speed = 26. + noise(seed) * 4. + (1. / mass.sqrt());
             let velocity = launch_debris_velocity(
                 forward,
-                Vec3::new(request.velocity.x, request.velocity.y, request.velocity_z),
+                visual_velocity(
+                    Vec2::new(request.velocity.x, request.velocity.y),
+                    request.velocity_z,
+                ),
                 offset.normalize_or_zero() * (0.8 + noise(seed.wrapping_add(1)) * 1.2),
                 speed,
                 camera_forward,

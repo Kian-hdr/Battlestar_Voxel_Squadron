@@ -21,7 +21,7 @@ fn fixture(classic: bool, depth: f32, x: f32) -> Game {
 }
 
 #[test]
-fn a_target_entering_the_firing_lane_after_launch_gets_smooth_depth_assistance() {
+fn a_target_entering_the_firing_lane_after_launch_cannot_evade_flat_fire() {
     for classic in [true, false] {
         for depth in [-2.4, 2.4] {
             let mut g = fixture(classic, depth, 2.);
@@ -33,7 +33,8 @@ fn a_target_entering_the_firing_lane_after_launch_gets_smooth_depth_assistance()
                 for shot in g.shots.iter().filter(|s| s.id == id) {
                     assert_eq!(shot.pos.x, 0.);
                     assert_eq!(shot.velocity, Point { x: 0., y: 24. });
-                    assert!(shot.velocity_z.abs() <= 18.);
+                    assert_eq!(shot.velocity_z, 0.);
+                    assert_eq!(shot.depth, 0.15);
                     assert!((shot.depth - shot.previous_depth).abs() <= 18. * DT + 1e-5);
                 }
                 if g.score > 0 {
@@ -70,21 +71,19 @@ fn aligned_wing_lanes_still_hit_exact_material_in_both_eras() {
 }
 
 #[test]
-fn a_departed_target_releases_its_depth_lock_and_a_surviving_aligned_target_is_acquired() {
+fn replacing_a_destroyed_target_cannot_leave_stale_depth_steering() {
     for classic in [true, false] {
         let mut g = fixture(classic, 2.4, 0.);
         g.enemies[0].velocity_z = 0.;
-        let previous_id = g.enemies[0].id;
         g.inject_shot(Point { x: 0., y: -8.25 }, true);
-        assert_eq!(g.shots[0].target_id, Some(previous_id));
+        assert_eq!(g.shots[0].target_id, None);
         // Another shot destroyed the original target before this one arrived.
         let mut replacement = g.enemies.remove(0);
         replacement.id += 100;
         replacement.depth = -2.4;
-        let replacement_id = replacement.id;
         g.enemies.push(replacement);
         g.step(Input::default(), DT);
-        assert_eq!(g.shots[0].target_id, Some(replacement_id));
+        assert_eq!(g.shots[0].target_id, None);
         for _ in 0..100 {
             g.step(Input::default(), DT);
             if g.score > 0 {
@@ -96,11 +95,11 @@ fn a_departed_target_releases_its_depth_lock_and_a_surviving_aligned_target_is_a
 }
 
 #[test]
-fn moving_outside_the_fixed_horizontal_lane_cannot_keep_a_depth_lock() {
+fn moving_outside_the_fixed_horizontal_lane_does_not_bend_or_home_a_shot() {
     let mut g = fixture(false, 2.4, 0.);
     g.inject_shot(Point { x: 0., y: -8.25 }, true);
     let id = g.shots[0].id;
-    assert!(g.shots[0].target_id.is_some());
+    assert_eq!(g.shots[0].target_id, None);
     g.enemies[0].pos.x = 8.;
     g.enemies[0].home.x = 7.35;
     g.step(Input::default(), DT);
