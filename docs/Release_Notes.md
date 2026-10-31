@@ -1,3 +1,13 @@
+# v0.4.2 · Combat alignment and natural exhaust/debris
+
+- Fixed depth targeting when enemies enter the firing lane after a shot has launched; stale locks are released and replaced. Horizontal aiming remains player-controlled, and exact occupied-voxel contact still determines hits.
+- Removed the red projectile-shaped impact effect. Player shots retain their color; existing heated hull fragments keep their localized glow.
+- Replaced rigid exhaust rods with continuously deforming, tapered luminous plumes. Nozzle faces stay fixed behind the hull.
+- Debris now recedes camera-away and downward into deep-space shadow. Contact responses are bounded, including near-frontal moving hulls. Visible pieces remain opaque until outside the actual viewport.
+- Added Quit Game to the shared title, pause and game-over menu, using normal application shutdown.
+
+See [release validation](Release_Validation.md) for actual tests and platform coverage.
+
 # v0.4.1 · Performance and visual continuity
 
 - Faster debris collision searches preserve the exact occupied-voxel contact rules.

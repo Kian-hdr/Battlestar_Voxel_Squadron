@@ -43,6 +43,7 @@ pub(super) enum Copy {
 #[derive(Component, Clone, Copy)]
 pub(super) enum Action {
     Primary,
+    Quit,
     Mute,
     Step(f32),
     Slider,
@@ -323,8 +324,10 @@ pub(super) fn spawn(commands: &mut Commands, fonts: &mut Assets<Font>) -> Entity
         .spawn((
             Layout::Footer,
             Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: px(7.),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                column_gap: px(20.),
                 padding: UiRect::top(px(18.)),
                 border: UiRect::top(px(1.)),
                 ..default()
@@ -339,7 +342,12 @@ pub(super) fn spawn(commands: &mut Commands, fonts: &mut Assets<Font>) -> Entity
         12.,
         SECONDARY,
     );
-    commands.entity(footer).add_children(&[creator, credits]);
+    let footer_text = column(commands, 7.);
+    commands
+        .entity(footer_text)
+        .add_children(&[creator, credits]);
+    let quit = button(commands, "QUIT GAME", Action::Quit, false);
+    commands.entity(footer).add_children(&[footer_text, quit]);
     commands
         .entity(panel)
         .add_children(&[header, columns, footer]);
@@ -349,6 +357,7 @@ pub(super) fn spawn(commands: &mut Commands, fonts: &mut Assets<Font>) -> Entity
 pub(super) fn interact(
     mut commands: Commands,
     mut session: ResMut<Session>,
+    mut exit: MessageWriter<AppExit>,
     mut settings: ResMut<AudioSettings>,
     sounds: Res<Sounds>,
     mut buttons: Query<(
@@ -387,6 +396,11 @@ pub(super) fn interact(
                     session.1 += 1;
                 }
                 "primary"
+            }
+            Action::Quit => {
+                exit.write(AppExit::Success);
+                info!("MENU quit requested normal AppExit");
+                "quit"
             }
             Action::Mute => {
                 session.0.muted = !session.0.muted;

@@ -1,3 +1,15 @@
+# Desktop release validation · v0.4.2
+
+Mac build 15, verified 31-Oct-2026. All 86 pure tests, formatting and release graphics Clippy pass locally. Native both-era/death/restart/pause/resize checks pass, with normal shutdown through the visible Quit Game menu interaction.
+
+The final replay checked 29,385 actual projectile mesh/color associations (including hit frames), 17,502 exhaust mesh updates with changing taper/length, and 424,384 debris movement steps. No significant camera-approach step was observed; the maximum backward correction was 0.004834 world units from collision skin, below the 0.01 diagnostic tolerance. Peak debris speed remained 36.000 after regression coverage fixed near-frontal amplification. Geometry size/opacity and viewport-only retirement are preserved.
+
+At physical 1920×1080, 1,021 frames averaged 8.333 ms / p95 8.775 ms (about 120 FPS) on Apple M5. The complete replay averaged 8.37 ms / p95 8.84 ms. These are bounded native measurements, not universal hardware guarantees. Target acquisition and damage remain deterministic and material-accurate; player horizontal aiming is unchanged.
+
+Native Windows/Linux package jobs and final artifact receipts will be recorded after completion. Graphical gameplay on those systems remains untested. Existing licensing, private incorporated-audio and fan-rights boundaries below remain applicable.
+
+## Historical v0.4.1 validation
+
 # Desktop release validation · v0.4.1
 
 macOS bundle build 14. Verified 30-Oct-2026 on Apple M5 / macOS 27.2. Native Windows/Linux package jobs and final notarization receipts are complete and recorded below.

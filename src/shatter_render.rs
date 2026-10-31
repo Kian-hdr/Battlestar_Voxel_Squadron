@@ -2,6 +2,7 @@
 use crate::Session;
 use battlestar_voxel::{
     simulation::{Phase, Point},
+    viewport::{background_overlap_exit, receding_contact_velocity, receding_velocity},
     voxel::{self, Geometry, UNIT},
     voxel_collision::{Collider, deflect_velocity, sweep_chunk},
     voxel_damage::{self, VoxelChunk, cooled_heat, fracture, split_chunk, thermal_tint},
@@ -117,6 +118,10 @@ pub(super) struct ShatterEffects {
     pub peak_speed: f32,
     pub offscreen_retired: usize,
     pub retained_after_timeout: usize,
+    /// Motion-only camera-depth probes. Up to 1 cm of collision skin is ignored.
+    pub camera_approach_steps: u32,
+    pub max_camera_approach: f32,
+    pub depth_motion_steps: u32,
     last_bounce: Option<(Vec3, f32)>,
 }
 impl ShatterEffects {
@@ -356,7 +361,13 @@ fn targets(session: &Session, galactica: &Transform, dt: f32) -> Vec<Target> {
     });
     result
 }
-fn move_body(body: &mut Body, dt: f32, start_elapsed: f32, targets: &[Target]) -> u32 {
+fn move_body(
+    body: &mut Body,
+    dt: f32,
+    start_elapsed: f32,
+    targets: &[Target],
+    camera_forward: Vec3,
+) -> u32 {
     let mut remaining = dt;
     let mut elapsed = start_elapsed;
     let mut bounces = 0;
@@ -382,7 +393,7 @@ fn move_body(body: &mut Body, dt: f32, start_elapsed: f32, targets: &[Target]) -
                 scale: target.scale,
                 velocity: target.velocity,
             };
-            if let Some(contact) = sweep_chunk(
+            if let Some(mut contact) = sweep_chunk(
                 body.bounds_min,
                 body.bounds_max,
                 body.position,
@@ -390,33 +401,59 @@ fn move_body(body: &mut Body, dt: f32, start_elapsed: f32, targets: &[Target]) -
                 body.rotation,
                 &collider,
                 remaining,
-            ) && earliest.as_ref().is_none_or(
-                |(old, _, _): &(battlestar_voxel::voxel_collision::Contact, Vec3, Vec3)| {
-                    contact.toi < old.toi
-                },
             ) {
-                earliest = Some((
-                    contact,
-                    target.velocity,
-                    position + target.velocity * (remaining * contact.toi),
-                ));
+                if contact.toi == 0.
+                    && (contact.point - body.position).dot(camera_forward) < 0.
+                    && let Some(exit) = background_overlap_exit(
+                        body.bounds_min,
+                        body.bounds_max,
+                        body.position,
+                        body.rotation,
+                        &collider,
+                        camera_forward,
+                    )
+                {
+                    contact = exit;
+                }
+                if earliest.as_ref().is_none_or(
+                    |(old, _, _): &(battlestar_voxel::voxel_collision::Contact, Vec3, Vec3)| {
+                        contact.toi < old.toi
+                    },
+                ) {
+                    earliest = Some((
+                        contact,
+                        target.velocity,
+                        position + target.velocity * (remaining * contact.toi),
+                    ));
+                }
             }
         }
         if let Some((contact, target_velocity, target_position)) = earliest {
             let old = body.velocity;
             body.position = contact.point + contact.normal * 0.004;
-            body.velocity = deflect_velocity(
-                old,
+            body.velocity = receding_contact_velocity(
+                deflect_velocity(
+                    old,
+                    target_velocity,
+                    contact.normal,
+                    contact.point - target_position,
+                )
+                .clamp_length_max(36.),
                 target_velocity,
                 contact.normal,
-                contact.point - target_position,
-            )
-            .clamp_length_max(36.);
+                camera_forward,
+            );
             if (body.velocity - old).length_squared() > 0.01 {
                 body.angular_velocity = (body.angular_velocity
                     + contact.normal.cross(old - target_velocity) * 0.16)
                     .clamp_length_max(12.);
                 bounces += 1;
+            }
+            if (body.velocity - target_velocity).dot(contact.normal) < -0.0001 {
+                // No bounded camera-away response can outrun this frontal hull.
+                // As with the two-contact budget below, hold its safe contact
+                // for this step instead of moving through occupied material.
+                break;
             }
             let spent = remaining * contact.toi;
             elapsed += spent;
@@ -483,11 +520,9 @@ pub(super) fn update(
     // would remove still-visible debris from these uncullable batched meshes.
     let clip = Mat4::perspective_infinite_reverse_rh(fov, aspect, p.near)
         * camera_transform.to_matrix().inverse();
-    let drift = battlestar_voxel::viewport::background_drift(
-        *camera_transform.forward(),
-        *camera_transform.up(),
-        fov,
-    );
+    let camera_forward = *camera_transform.forward();
+    let drift =
+        battlestar_voxel::viewport::background_drift(camera_forward, *camera_transform.up(), fov);
     let targets = targets(&session, &galactica, dt);
     let mut bounces = 0;
     let mut peak_speed = 0_f32;
@@ -496,6 +531,9 @@ pub(super) fn update(
     let mut cooling_seen = false;
     let mut retired = 0;
     let mut retained = 0;
+    let mut camera_approach_steps = 0;
+    let mut max_camera_approach = 0_f32;
+    let mut depth_motion_steps = 0;
     let mut i = 0;
     while i < state.active.len() {
         let effect = &mut state.active[i];
@@ -507,9 +545,15 @@ pub(super) fn update(
             let b = &mut effect.bodies[j];
             let flight_dt = (effect.age - b.release).max(0.) - (previous_age - b.release).max(0.);
             if flight_dt > 0. {
-                // Recede gently while retaining the opaque, cooling hull.
-                b.velocity += drift * flight_dt;
-                let contacts = move_body(b, flight_dt, dt - flight_dt, &targets);
+                let previous_position = b.position;
+                // The visible hull always recedes, including fragments born from
+                // incoming fire or a contact reflection. Preserve its true size.
+                b.velocity = receding_velocity(b.velocity + drift * flight_dt, camera_forward, 8.);
+                let contacts = move_body(b, flight_dt, dt - flight_dt, &targets, camera_forward);
+                let approach = -(b.position - previous_position).dot(camera_forward);
+                max_camera_approach = max_camera_approach.max(approach);
+                camera_approach_steps += u32::from(approach > 0.01);
+                depth_motion_steps += 1;
                 bounces += contacts;
                 if contacts > 0 {
                     last_bounce = Some((b.position, session.0.elapsed));
@@ -540,7 +584,11 @@ pub(super) fn update(
                         chunk,
                         parent.position + offset,
                         parent.rotation,
-                        parent.velocity + parent.angular_velocity.cross(offset) + kick,
+                        receding_velocity(
+                            parent.velocity + parent.angular_velocity.cross(offset) + kick,
+                            camera_forward,
+                            8.,
+                        ),
                         parent.angular_velocity + Vec3::new(noise(k as u64) * 4. - 2., 2., -1.),
                         effect.age,
                         f32::INFINITY,
@@ -572,6 +620,9 @@ pub(super) fn update(
         }
         i += 1;
     }
+    state.camera_approach_steps += camera_approach_steps;
+    state.max_camera_approach = state.max_camera_approach.max(max_camera_approach);
+    state.depth_motion_steps += depth_motion_steps;
     state.offscreen_retired += retired;
     state.retained_after_timeout += retained;
     if last_bounce.is_some() {
@@ -622,9 +673,13 @@ pub(super) fn update(
             let offset = rotation * (Vec3::from_array(chunk.pivot) - contact);
             let mass = chunk.cells.0.len() as f32;
             let speed = 12. + noise(seed) * 4. + (1. / mass.sqrt());
-            let velocity = forward * speed
-                + offset.normalize_or_zero() * (0.8 + noise(seed.wrapping_add(1)) * 1.2)
-                + Vec3::new(request.velocity.x, request.velocity.y, request.velocity_z) * 0.08;
+            let velocity = receding_velocity(
+                forward * speed
+                    + offset.normalize_or_zero() * (0.8 + noise(seed.wrapping_add(1)) * 1.2)
+                    + Vec3::new(request.velocity.x, request.velocity.y, request.velocity_z) * 0.08,
+                camera_forward,
+                8.,
+            );
             let omega = offset.cross(forward) * 1.2
                 + Vec3::new(
                     noise(seed.wrapping_add(2)) * 5. - 2.5,

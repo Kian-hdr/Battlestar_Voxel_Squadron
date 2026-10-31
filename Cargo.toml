@@ -1,6 +1,6 @@
 [package]
 name = "battlestar_voxel"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 rust-version = "1.99.1"
 authors = ["Kian Konrad Tajbakhsh"]

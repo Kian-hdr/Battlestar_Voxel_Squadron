@@ -32,7 +32,7 @@ impl Plugin for PresentationPlugin {
             .init_resource::<shatter::ShatterQueue>()
             .init_resource::<shatter::ShatterEffects>()
             .add_systems(Startup, setup)
-            .add_systems(FixedUpdate, (tick, shatter::update, update_impacts).chain())
+            .add_systems(FixedUpdate, (tick, shatter::update).chain())
             .add_systems(
                 Update,
                 (
@@ -42,11 +42,13 @@ impl Plugin for PresentationPlugin {
                     sync_era,
                     sync_visuals,
                     shatter::render,
+                    exercise_menu_quit,
                     menu::interact,
                     menu::update,
                     update_hud,
                     update_reserves,
                     animate_background,
+                    audit_projectile_colors,
                     smoke_test,
                 )
                     .chain(),
@@ -66,7 +68,6 @@ struct Art {
     hull: Handle<StandardMaterial>,
     cyan: Handle<StandardMaterial>,
     red: Handle<StandardMaterial>,
-    gold: Handle<StandardMaterial>,
     shot: Handle<Mesh>,
 }
 #[derive(Resource, Default)]
@@ -79,12 +80,7 @@ struct Player;
 #[derive(Component)]
 struct Galactica;
 #[derive(Component)]
-struct Engine;
-#[derive(Component)]
-struct ImpactFlash {
-    remaining: f32,
-    run: u64,
-}
+struct Engine(u8);
 #[derive(Component)]
 struct Backdrop;
 #[derive(Component)]
@@ -105,6 +101,10 @@ struct FrameStats {
     samples_1080: Vec<f32>,
     samples: Vec<f32>,
     frames: u64,
+    exhaust_min_length: Option<f32>,
+    exhaust_max_length: f32,
+    exhaust_updates: u64,
+    projectile_color_checks: u64,
 }
 #[derive(Resource, Default)]
 struct Smoke {
@@ -175,7 +175,6 @@ fn setup(
     );
     commands.insert_resource(BodyPixelFont(body_font));
     let white = Color::srgb(0.84, 0.88, 0.90);
-    let gold = Color::srgb(0.91, 0.66, 0.32);
     commands.spawn((
         Camera3d::default(),
         Tonemapping::Reinhard,
@@ -219,9 +218,14 @@ fn setup(
     });
     let cyan = emitting(&mut materials, Color::srgb(0.32, 0.88, 1.));
     let red = emitting(&mut materials, Color::srgb(1., 0.22, 0.11));
-    let gold_mat = emitting(&mut materials, gold);
     let shot = meshes.add(mesh(voxel::projectile(), voxel::UNIT));
-    let engine_mesh = meshes.add(mesh(voxel::viper_exhaust(), voxel::UNIT));
+    let engine_material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
     let viper = meshes.add(mesh(voxel::viper(true), voxel::UNIT));
     let viper_modern = meshes.add(mesh(voxel::viper(false), voxel::UNIT));
     let classic = meshes.add(mesh(voxel::raider(true), voxel::UNIT));
@@ -245,16 +249,29 @@ fn setup(
             Transform::from_xyz(0., -9., 0.),
         ))
         .id();
-    for x in [-0.36f32, 0., 0.36] {
+    for (nozzle, x) in [-0.36f32, 0., 0.36].into_iter().enumerate() {
+        let plume = battlestar_voxel::exhaust::sample(0., nozzle as u8, true, 0.);
+        let mut exhaust = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        exhaust.insert_attribute(Mesh::ATTRIBUTE_POSITION, plume.positions);
+        exhaust.insert_attribute(Mesh::ATTRIBUTE_COLOR, plume.colors);
+        exhaust.insert_attribute(
+            Mesh::ATTRIBUTE_NORMAL,
+            vec![[0., 0., 1.]; battlestar_voxel::exhaust::VERTICES],
+        );
+        exhaust.insert_indices(Indices::U32(battlestar_voxel::exhaust::indices()));
         let engine = commands
             .spawn((
-                Engine,
-                Mesh3d(engine_mesh.clone()),
-                MeshMaterial3d(cyan.clone()),
+                Engine(nozzle as u8),
+                Mesh3d(meshes.add(exhaust)),
+                MeshMaterial3d(engine_material.clone()),
+                bevy::camera::visibility::NoFrustumCulling,
                 Transform::from_xyz(
-                    x,
-                    -8. * voxel::UNIT - 0.004,
-                    if x == 0. { 0.24 } else { 0. },
+                    x + voxel::UNIT * 0.5,
+                    battlestar_voxel::exhaust::NOZZLE_Y,
+                    (if x == 0. { 0.24 } else { 0. }) + voxel::UNIT * 0.5,
                 ),
             ))
             .id();
@@ -309,7 +326,6 @@ fn setup(
         hull,
         cyan,
         red,
-        gold: gold_mat,
         shot,
     });
     let hud = label(
@@ -394,7 +410,6 @@ fn tick(
     controls: Res<Controls>,
     sounds: Res<Sounds>,
     audio_settings: Res<AudioSettings>,
-    art: Res<Art>,
     smoke: Res<Smoke>,
     mut shatters: ResMut<shatter::ShatterQueue>,
 ) {
@@ -431,23 +446,6 @@ fn tick(
             velocity_z,
         } = event
         {
-            commands.spawn((
-                ImpactFlash {
-                    remaining: 0.12,
-                    run: session.1,
-                },
-                Mesh3d(art.shot.clone()),
-                MeshMaterial3d(art.red.clone()),
-                Transform::from_xyz(impact.x, impact.y, *depth + 0.15),
-                PointLight {
-                    color: Color::srgb(1., 0.025, 0.01),
-                    intensity: 1600.,
-                    range: 2.5,
-                    radius: 0.12,
-                    shadows_enabled: false,
-                    ..default()
-                },
-            ));
             shatters.0.push(shatter::Request {
                 id: *id,
                 pos: *pos,
@@ -482,26 +480,6 @@ fn tick(
                 depth: 0.,
                 velocity_z: 0.,
             });
-        }
-    }
-}
-
-fn update_impacts(
-    mut commands: Commands,
-    time: Res<Time<Fixed>>,
-    session: Res<Session>,
-    mut flashes: Query<(Entity, &mut ImpactFlash, &mut PointLight)>,
-) {
-    for (entity, mut flash, mut light) in &mut flashes {
-        if flash.run != session.1 {
-            commands.entity(entity).despawn();
-        } else if session.0.phase != Phase::Paused {
-            flash.remaining -= time.delta_secs();
-            if flash.remaining <= 0. {
-                commands.entity(entity).despawn();
-            } else {
-                light.intensity = 1600. * (flash.remaining / 0.12);
-            }
         }
     }
 }
@@ -656,9 +634,34 @@ fn animate_background(
     time: Res<Time>,
     session: Res<Session>,
     mut stars: Query<&mut Transform, With<Backdrop>>,
+    engines: Query<(&Engine, &Mesh3d)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut exhaust_clock: Local<f32>,
+    mut stats: ResMut<FrameStats>,
 ) {
     if session.0.phase == Phase::Paused {
         return;
+    }
+    *exhaust_clock += time.delta_secs();
+    for (engine, mesh) in &engines {
+        let plume = battlestar_voxel::exhaust::sample(
+            *exhaust_clock,
+            engine.0,
+            session.0.wave < 4,
+            (session.0.velocity_x.abs() / 16.).min(1.),
+        );
+        if let Some(mesh) = meshes.get_mut(&mesh.0) {
+            let length = plume.positions.iter().map(|p| -p[1]).fold(0., f32::max);
+            stats.exhaust_min_length = Some(
+                stats
+                    .exhaust_min_length
+                    .map_or(length, |old| old.min(length)),
+            );
+            stats.exhaust_max_length = stats.exhaust_max_length.max(length);
+            stats.exhaust_updates += 1;
+            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, plume.positions);
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, plume.colors);
+        }
     }
     for mut t in &mut stars {
         t.translation.y -= time.delta_secs() * 0.18;
@@ -667,6 +670,56 @@ fn animate_background(
         }
     }
 }
+// The v0.4.1 impact flash reused the bullet mesh and looked like a red
+// friendly projectile. Audit the actual scene graph, including hit frames.
+fn audit_projectile_colors(
+    smoke: Res<Smoke>,
+    session: Res<Session>,
+    art: Res<Art>,
+    fleet: Res<FleetVisuals>,
+    meshes: Query<(Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>)>,
+    mut stats: ResMut<FrameStats>,
+) {
+    if !smoke.enabled {
+        return;
+    }
+    for (entity, mesh, material) in &meshes {
+        if mesh.0 != art.shot {
+            continue;
+        }
+        let shot = session
+            .0
+            .shots
+            .iter()
+            .find(|shot| fleet.shots.get(&shot.id) == Some(&entity))
+            .expect("projectile-shaped visuals must correspond to an actual live shot");
+        let expected = if shot.friendly { &art.cyan } else { &art.red };
+        assert_eq!(
+            &material.0, expected,
+            "projectiles must keep their side's color through contact"
+        );
+        stats.projectile_color_checks += 1;
+    }
+}
+
+// Inject after Bevy's UI focus pass, immediately before the real menu handler.
+// Host cursor position cannot erase this deterministic shutdown probe.
+fn exercise_menu_quit(
+    mut smoke: ResMut<Smoke>,
+    mut buttons: Query<(&menu::Action, &mut Interaction)>,
+) {
+    if !smoke.enabled || smoke.stage != 9 {
+        return;
+    }
+    for (action, mut interaction) in &mut buttons {
+        if matches!(action, menu::Action::Quit) {
+            *interaction = Interaction::Pressed;
+        }
+    }
+    smoke.stage = 10;
+    info!("SMOKE menu quit button pressed through normal interaction path");
+}
+
 fn capture(commands: &mut Commands, name: &str) {
     let dir = std::env::var("BSVX_EVIDENCE_DIR").unwrap_or_else(|_| "evidence".into());
     let path = std::path::Path::new(&dir).join(name);
@@ -684,9 +737,10 @@ fn smoke_test(
     mut stats: ResMut<FrameStats>,
     mut shatters: ResMut<shatter::ShatterEffects>,
     mut shatter_queue: ResMut<shatter::ShatterQueue>,
-    mut exit: MessageWriter<AppExit>,
     mut window: Single<&mut Window>,
     player: Single<&Visibility, With<Player>>,
+    mut menu_buttons: Query<(&menu::Action, &mut Interaction, &ComputedNode)>,
+    menu_root: Single<&Visibility, With<menu::MenuRoot>>,
 ) {
     stats.frames += 1;
     if time.elapsed_secs() > 5. && stats.samples.len() < 10000 {
@@ -961,6 +1015,29 @@ fn smoke_test(
                 shatters.offscreen_retired > 0,
                 "debris must retire after leaving the viewport"
             );
+            assert!(
+                stats.projectile_color_checks > 0,
+                "actual projectile colors must be exercised"
+            );
+            assert!(
+                shatters.peak_speed <= battlestar_voxel::viewport::DEBRIS_SPEED_LIMIT + 0.01,
+                "debris contacts must not amplify into explosive speeds"
+            );
+            assert!(
+                shatters.depth_motion_steps > 0 && shatters.camera_approach_steps == 0,
+                "native debris must recede rather than approach the viewer"
+            );
+            info!(
+                "SMOKE debris_depth steps={} approach_steps={} max_approach={:.6}",
+                shatters.depth_motion_steps,
+                shatters.camera_approach_steps,
+                shatters.max_camera_approach
+            );
+            assert!(
+                stats.exhaust_updates > 100
+                    && stats.exhaust_max_length - stats.exhaust_min_length.unwrap_or(0.) > 0.06,
+                "actual exhaust meshes must animate instead of staying rigid rods"
+            );
             stats.samples.sort_by(|a, b| a.total_cmp(b));
             let n = stats.samples.len();
             if n > 0 {
@@ -1028,11 +1105,52 @@ fn smoke_test(
                     shatters.offscreen_retired,
                     shatters.retained_after_timeout
                 );
+            let report = report.trim_end().trim_end_matches('}').to_owned()
+                + &format!(
+                    ",\"exhaust_mesh_updates\":{},\"exhaust_min_length\":{:.4},\"exhaust_max_length\":{:.4}}}\n",
+                    stats.exhaust_updates,
+                    stats.exhaust_min_length.unwrap_or(0.),
+                    stats.exhaust_max_length
+                );
+            let report = report.trim_end().trim_end_matches('}').to_owned()
+                + &format!(
+                    ",\"camera_approach_steps\":{},\"max_camera_approach\":{:.6},\"depth_motion_steps\":{}}}\n",
+                    shatters.camera_approach_steps,
+                    shatters.max_camera_approach,
+                    shatters.depth_motion_steps
+                );
+            let report = report.trim_end().trim_end_matches('}').to_owned()
+                + &format!(
+                    ",\"projectile_color_checks\":{}}}\n",
+                    stats.projectile_color_checks
+                );
             std::fs::write(std::path::Path::new(&dir).join("Smoke_Result.json"), report)
                 .expect("write smoke result");
             info!("SMOKE complete");
-            exit.write(AppExit::Success);
+            if g.phase == Phase::Playing {
+                g.toggle_pause();
+            }
             smoke.stage = 8;
+            smoke.started = now;
+        }
+        8 if now - smoke.started > 0.25 => {
+            assert_eq!(
+                **menu_root,
+                Visibility::Visible,
+                "quit must be available in a visible menu"
+            );
+            let mut found = false;
+            for (action, _interaction, node) in &mut menu_buttons {
+                if matches!(action, menu::Action::Quit) {
+                    assert!(
+                        node.size().min_element() >= 20.,
+                        "quit must have a visible clickable layout"
+                    );
+                    found = true;
+                }
+            }
+            assert!(found, "menu must include Quit Game");
+            smoke.stage = 9;
         }
         _ => {}
     }
@@ -1043,7 +1161,6 @@ fn sync_era(
     art: Res<Art>,
     mut last: Local<Option<Era>>,
     mut ships: Query<(&mut Mesh3d, Option<&Player>), Or<(With<Player>, With<Galactica>)>>,
-    mut engines: Query<&mut MeshMaterial3d<StandardMaterial>, With<Engine>>,
 ) {
     let era = Era::for_wave(session.0.wave);
     if *last == Some(era) {
@@ -1061,13 +1178,6 @@ fn sync_era(
             art.galactica_classic.clone()
         } else {
             art.galactica_modern.clone()
-        };
-    }
-    for mut material in &mut engines {
-        material.0 = if classic {
-            art.gold.clone()
-        } else {
-            art.cyan.clone()
         };
     }
     *last = Some(era);

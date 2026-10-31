@@ -223,18 +223,7 @@ impl Game {
     pub fn inject_shot(&mut self, pos: Point, friendly: bool) {
         let id = self.id();
         let target_id = if friendly {
-            self.enemies
-                .iter()
-                .filter(|e| {
-                    let extent = enemy_half_extents(e);
-                    e.pos.y > pos.y && (e.pos.x - pos.x).abs() <= extent[0]
-                })
-                .min_by(|a, b| {
-                    (a.pos.y - pos.y)
-                        .total_cmp(&(b.pos.y - pos.y))
-                        .then(a.id.cmp(&b.id))
-                })
-                .map(|e| e.id)
+            friendly_depth_target(pos, None, &self.enemies).map(|e| e.id)
         } else {
             None
         };
@@ -456,12 +445,13 @@ impl Game {
             self.fire_timer = cfg.fire_interval;
         }
         for s in &mut self.shots {
-            if s.friendly
-                && let Some(enemy) = s
-                    .target_id
-                    .and_then(|id| self.enemies.iter().find(|e| e.id == id))
-                && enemy.pos.y + enemy_half_extents(enemy)[1] > s.pos.y
-            {
+            let target = if s.friendly {
+                friendly_depth_target(s.pos, s.target_id, &self.enemies)
+            } else {
+                None
+            };
+            s.target_id = target.map(|e| e.id);
+            if let Some(enemy) = target {
                 // Continuous depth-only intercept steering preserves the original
                 // screen-space aim, trajectory and occupied-voxel hit test.
                 let closing = (s.velocity.y - enemy.velocity.y).max(2.);
@@ -555,6 +545,27 @@ impl Game {
         }
     }
 }
+// Keep a valid depth lock stable, but acquire targets that enter the player's
+// unchanged firing lane after launch. A departed/dead target cannot leave a shot
+// permanently steering toward an unrelated depth. Exact voxel contact still
+// decides every hit; this corridor only selects depth assistance.
+fn friendly_depth_target(pos: Point, locked: Option<u64>, enemies: &[Enemy]) -> Option<&Enemy> {
+    let aligned = |e: &&Enemy| {
+        let extent = enemy_half_extents(e);
+        e.pos.y + extent[1] > pos.y && (e.pos.x - pos.x).abs() <= extent[0]
+    };
+    enemies
+        .iter()
+        .find(|e| Some(e.id) == locked && aligned(e))
+        .or_else(|| {
+            enemies.iter().filter(aligned).min_by(|a, b| {
+                (a.pos.y - pos.y)
+                    .total_cmp(&(b.pos.y - pos.y))
+                    .then(a.id.cmp(&b.id))
+            })
+        })
+}
+
 /// Conservative actual-model extents around the shared model origin, transformed
 /// into world axes using the same rigid rotation as contact tests and rendering.
 pub fn enemy_half_extents(enemy: &Enemy) -> [f32; 3] {
