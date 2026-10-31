@@ -1,9 +1,14 @@
-# v0.4.3 · Voxel exhaust and straight-flight debris
+# v0.4.3 · Strict 2D hits, stable Viper and voxel effects
+
+- Restored the Galactica’s full right-side framing and earlier apparent size; its complete hull stays visible as the window resizes.
 
 - Exhaust is now made from separate, fixed-size glowing cubes, with a steady voxel core and an irregular tapered stream. No smooth cone skin or static rods.
 - Debris launches faster with impact and hull momentum, then follows a straight constant-velocity path while unobstructed. Removed continuous background steering and delayed subdivision kicks.
 - Split fragments inherit parent translation and spin. Genuine hull contacts keep bounded deflections/escape slides; visible geometry still retires only outside the viewport and darkens in deep-space shadow.
-- The shot-depth/color fixes, stable Viper, menu Quit Game and existing audio mix are retained.
+- Shots use exact projected occupied voxel silhouettes independently of cosmetic depth. Rendering and the visible beam tip match the same 2D hit plane.
+- Nonfatal damage preserves the Viper position, momentum and rotation instead of resetting it to the center.
+- macOS shows “Battlestar: Voxel Squadron” as its localized app name while retaining the portable underscore filename.
+- Projectile colors, menu Quit Game and the existing audio mix are retained.
 
 See [release validation](Release_Validation.md) for actual measurements and platform coverage.
 

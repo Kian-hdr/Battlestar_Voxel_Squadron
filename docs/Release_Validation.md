@@ -1,12 +1,28 @@
 # Desktop release validation · v0.4.3
 
-Mac build 16, verified 31-Oct-2026. All 90 pure tests, formatting and release graphics Clippy pass locally. Exhaust topology regression fails on the old connected 20-vertex skin and passes for independent cube faces with one fixed edge length; no triangles connect different exhaust cubes. Visible cubes flow while cycling through dim endpoints; the nozzle core remains lit and behind both hulls.
+Mac build 19, verified 31-Oct-2026. All 100 pure regression tests, formatting and release graphics Clippy pass locally. Tests reproduce the former depth misses and life-loss X reset, compare projected occupied-voxel collision against an independent convex-hull reference, and check both complete Galactica hulls across desktop, Retina, tall and ultrawide views.
 
-The complete native replay passes both eras, projectile colors, exhaust animation, collision/cooling/subdivision, pause/restart, resize, minimum-size menu and normal Quit Game shutdown. Across 152,405 unobstructed debris steps there were zero velocity/course changes and zero measured path error. All 219 split translation samples inherited velocity without impulse. Peak speed remains 36.000; no significant camera-approach steps occurred (maximum collision-skin correction 0.005633 world units, below the 0.01 diagnostic tolerance). Only actual hull contacts may change a trajectory.
+Rendering uses orthographic projection with angled voxel models. Cosmetic depth cannot shift drawn XY. Actual renderer audits check enemy/shot alignment, projectile ownership/color, leading-face contact alignment and continuous player visibility. The full native replay verifies nonfatal position continuity, both eras, exhaust, debris collision/cooling/subdivision, pause/restart, resizing and normal Quit Game shutdown. Seven native viewport/era checks confirm that the complete Galactica stays inside the view; its right-side position and apparent size match the earlier composition.
 
-At physical 1920×1080, 1,020 frames averaged 8.342 ms / p95 8.783 ms (about 120 FPS) on Apple M5. Complete 5,451-frame scenario mean 8.37 ms / p95 8.78 ms. These are bounded measurements, not universal hardware guarantees. Faster departure follows launch momentum; no artificial late steering, timed in-view deletion or geometry scaling was introduced.
+Exhaust consists of separate fixed-size glowing cubes, a steady nozzle core and irregular flowing streams. The topology regression rejects the former connected skin. Debris launches faster once and remains ballistic while unobstructed. Across 104,949 native unobstructed steps, velocity/course changes and path error were zero; all 257 split samples inherited translation without impulse. Peak speed was 36.000; there were no significant camera-approach steps. Maximum collision-skin correction was 0.005633 world units, below the 0.01 diagnostic tolerance. Genuine hull contacts may deflect fragments. Opaque geometry darkens into spatial shadow and retires only outside the viewport.
 
-Native Windows/Linux package jobs and final artifact receipts will be recorded after completion. Graphical gameplay on those systems remains untested. Existing private incorporated-audio, licensing and fan-rights boundaries remain applicable.
+At physical 1920×1080, 1,020 frames averaged 8.334 ms / p95 8.707 ms (about 120 FPS) on Apple M5. The complete 5,168-frame scenario averaged 8.37 ms / p95 8.74 ms. These are bounded hardware/workload measurements. Compiled source is `c0e7d554d2e0b40d42c710ecdf91c216c58d74e2`.
+
+The macOS bundle keeps its portable underscore filename and uses the localized display title “Battlestar: Voxel Squadron.” The final app and DMG are Developer ID signed, notarized, stapled and Gatekeeper-accepted. The installed app came from a read-only DMG mount and matches the native-tested signed executable. Windows/Linux native packages and independent archive checks pass. Each native runner passed all 100 tests and graphics Clippy before linking and packaging. Graphical Windows/Linux gameplay remains untested. Existing incorporated-audio, licensing and fan-rights boundaries remain applicable.
+
+## v0.4.3 Mac package identity
+
+App notarization receipt: `1c57cef4-efec-4d6f-92a4-bcf430cd8e88`. DMG receipt: `71641aee-413d-462b-afbc-d555115141fd`. Final DMG SHA-256: `e36f8e6f1bcb02bc94be4ecb7849f9c79013267313c38be018ca096669383ae5`. The installed build 19 passed movement, firing, pause and visual framing checks and retains the proper localized application name. Signed executable SHA-256: `7eb9c3025ff83186bf795a1518486bc0f52399863430885f9e992cad05d8085b`.
+
+## v0.4.3 native package checks
+
+[Native Windows/Linux run](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41198148699) and [source checks](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/actions/runs/41198148915) succeeded for the compiled source above.
+
+- Windows x64: PE32+ GUI executable, 254 files and 253 internal checksums; safe paths, source notices and approved embedded audio verified. Ordinary Git text files contain only expected CRLF conversion; byte-preserved notices remain exact. Windows is unsigned.
+- Linux x64: ELF64 native executable, 255 files and 254 internal checksums; executable/launcher modes, safe paths, source-pinned notices and approved embedded audio pass all 17 checks.
+- Mac Apple Silicon: final signed/notarized DMG and mounted/copied installed app pass the checks above.
+
+Three platform archives, their individual checksum files and aggregate `SHA256SUMS.txt` form seven release assets. Final documentation/screenshots are the only changes after the compiled source. Screenshots are actual final game captures resized to at most 1920 pixels; original captures are retained. No AI raster generation or content retouching was used. Windows/Linux graphical gameplay remains untested; native builds and archive checks are distinct from target-device gameplay.
 
 ## Historical v0.4.2 validation
 

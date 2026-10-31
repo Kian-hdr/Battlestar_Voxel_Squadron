@@ -1,6 +1,6 @@
 # Battlestar: Voxel Squadron
 
-A native Rust 3D voxel arcade game by **Kian Konrad Tajbakhsh**. Fly a Viper, defend the fleet, and break Cylon formations. Ships are built from editable voxel cells, and destroyed hulls break into connected, cooling debris.
+A native Rust arcade game with 3D voxel ships by **Kian Konrad Tajbakhsh**. Fly a Viper, defend the fleet, and break Cylon formations. Ships are built from editable voxel cells, and destroyed hulls break into connected, cooling debris.
 
 ![Classic fleet combat](docs/Screenshots/Classic_Combat.png)
 
@@ -8,11 +8,11 @@ A native Rust 3D voxel arcade game by **Kian Konrad Tajbakhsh**. Fly a Viper, de
 
 Get the desktop packages from [GitHub Releases](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases). This is an early playable fan prototype.
 
-- **[macOS DMG, Apple Silicon](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.2/Battlestar_Voxel_Squadron_v0.4.2_macOS_Apple_Silicon.dmg):** open the DMG, drag `Battlestar_Voxel_Squadron.app` to Applications, then launch it.
-- **[Windows ZIP, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.2/Battlestar_Voxel_Squadron_v0.4.2_Windows_x86_64.zip):** extract the ZIP and run `Battlestar_Voxel_Squadron.exe`.
-- **[Linux archive, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.2/Battlestar_Voxel_Squadron_v0.4.2_Linux_x86_64.tar.gz):** extract the archive, install the runtime libraries listed in its README, and run `./Battlestar_Voxel_Squadron` in a graphical session with a Vulkan driver.
+- **[macOS DMG, Apple Silicon](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.3/Battlestar_Voxel_Squadron_v0.4.3_macOS_Apple_Silicon.dmg):** open the DMG, drag `Battlestar_Voxel_Squadron.app` to Applications, then launch it.
+- **[Windows ZIP, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.3/Battlestar_Voxel_Squadron_v0.4.3_Windows_x86_64.zip):** extract the ZIP and run `Battlestar_Voxel_Squadron.exe`.
+- **[Linux archive, x64](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.3/Battlestar_Voxel_Squadron_v0.4.3_Linux_x86_64.tar.gz):** extract the archive, install the runtime libraries listed in its README, and run `./Battlestar_Voxel_Squadron` in a graphical session with a Vulkan driver.
 
-v0.4.2 fixes late depth targeting and the red impact-beam artifact, adds flowing tapered exhaust and receding debris, and includes Quit Game in the menu. See [release notes](docs/Release_Notes.md).
+v0.4.3 fixes strict 2D projectile hits and Viper position jumps, restores full Galactica framing, adds flowing voxel exhaust and fast straight-flight debris, and preserves the proper app display name and menu Quit Game. See [release notes](docs/Release_Notes.md).
 
 No account, server or internet connection is needed to play. [Validation notes](docs/Release_Validation.md) state which platforms were build-tested and which were played. Windows binaries are unsigned; SmartScreen may show an unknown-publisher warning.
 
@@ -31,7 +31,7 @@ The menu includes effects volume, mute and a sound preview. Default effects volu
 
 Three Vipers, 24 Raiders per wave, 100 points for a formation kill and 200 for a diving kill. Survive faster waves with bounded attack rates and brief respawn protection. Sectors 1–3 use the classic 1978 fleet; sector 4 onward changes the entire fleet to the reimagined 2004 era.
 
-The fixed-step simulation handles horizontal arcade combat while ships bank and avoid each other in 3D. Friendly fire follows aligned enemies in depth so cinematic flight height does not make them unreachable. Debris comes from actual model cells, remains in connected chunks, cools in flight and deflects from other hulls.
+The fixed-step simulation handles horizontal arcade combat while ships bank and avoid each other in 3D. Combat uses a strict 2D plane: shots hit the visible occupied voxel silhouette regardless of cosmetic depth. The orthographic camera retains angled voxel models without depth parallax. Debris comes from actual model cells, remains in connected chunks, cools in flight and deflects from other hulls.
 
 ![Menu](docs/Screenshots/Menu.png)
 ![Reimagined fleet](docs/Screenshots/Reimagined_Combat.png)
