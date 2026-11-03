@@ -1,20 +1,20 @@
-# Battlestar: Voxel Squadron
+<h1 align="center">Battlestar: Voxel Squadron</h1>
 
-A Rust arcade game with destructible 3D voxel ships.
+<p align="center">A Rust arcade game with destructible 3D voxel ships.</p>
 
-<img src="assets/App_Icon/Battlestar_Voxel.icon/Assets/Viper.svg" width="72" alt="Battlestar: Voxel Squadron icon">
+<p align="center"><img src="assets/App_Icon/Battlestar_Voxel.icon/Assets/Viper.svg" width="72" alt="Battlestar: Voxel Squadron icon"></p>
 
-## Download
+<h2 align="center">Download</h2>
 
-<p>
+<p align="center">
 <a href="https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_macOS_Apple_Silicon.dmg"><img src="docs/assets/downloads/download_1.svg" width="240" height="48" alt="Download for macOS"></a>
 <a href="https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Windows_x86_64.zip"><img src="docs/assets/downloads/download_2.svg" width="240" height="48" alt="Download for Windows"></a>
 <a href="https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Linux_x86_64.tar.gz"><img src="docs/assets/downloads/download_3.svg" width="240" height="48" alt="Download for Linux"></a>
 </p>
 
-[DMG · Apple silicon · v0.4.4](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_macOS_Apple_Silicon.dmg) · [Windows ZIP · x64 · v0.4.4](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Windows_x86_64.zip) · [Linux TAR.GZ · x64 · v0.4.4](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Linux_x86_64.tar.gz)
+<p align="center"><a href="https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_macOS_Apple_Silicon.dmg">DMG · Apple silicon · v0.4.4</a> · <a href="https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Windows_x86_64.zip">Windows ZIP · x64 · v0.4.4</a> · <a href="https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Linux_x86_64.tar.gz">Linux TAR.GZ · x64 · v0.4.4</a></p>
 
-[Release notes](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/tag/v0.4.4)
+<p align="center"><a href="https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/tag/v0.4.4">Release notes</a></p>
 
 A native Rust arcade game with 3D voxel ships by **Kian Konrad Tajbakhsh**. Fly a Viper, defend the fleet, and break Cylon formations. Ships are built from editable voxel cells, and destroyed hulls break into connected, cooling debris.
 
