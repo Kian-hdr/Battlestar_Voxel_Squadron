@@ -2,6 +2,8 @@
 
 A Rust arcade game with destructible 3D voxel ships.
 
+<img src="assets/App_Icon/Battlestar_Voxel.icon/Assets/Viper.svg" width="72" alt="Battlestar: Voxel Squadron icon">
+
 ## Download
 
 <p>
