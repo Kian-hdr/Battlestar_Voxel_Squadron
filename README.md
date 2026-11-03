@@ -2,6 +2,8 @@
 
 A native Rust arcade game with 3D voxel ships by **Kian Konrad Tajbakhsh**. Fly a Viper, defend the fleet, and break Cylon formations. Ships are built from editable voxel cells, and destroyed hulls break into connected, cooling debris.
 
+[![macOS DMG · Apple silicon](https://img.shields.io/badge/macOS%20DMG%20%C2%B7%20Apple%20silicon-24292F?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_macOS_Apple_Silicon.dmg) [![Windows ZIP · x64](https://img.shields.io/badge/Windows%20ZIP%20%C2%B7%20x64-24292F?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Windows_x86_64.zip) [![Linux TAR.GZ · x64](https://img.shields.io/badge/Linux%20TAR.GZ%20%C2%B7%20x64-24292F?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Kian-hdr/Battlestar_Voxel_Squadron/releases/download/v0.4.4/Battlestar_Voxel_Squadron_v0.4.4_Linux_x86_64.tar.gz)
+
 ![Classic fleet combat](docs/Screenshots/Classic_Combat.png)
 
 ## Download and play
