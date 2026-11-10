@@ -30,7 +30,7 @@ Original selected files: cg1.wav, pistol.wav, rifle.wav.
 https://opengameart.org/content/2-high-quality-explosions
 Original selected files: explode.wav, explodemini.wav.
 
-Modifications by Kian Konrad Tajbakhsh / Battlestar Voxel, 29-Oct-2026:
+Modifications by Kian Konrad / Battlestar Voxel, 29-Oct-2026:
 trimmed past the sharp onset, pitch-adjusted, band-filtered, layered with quiet
 delayed copies, mixed to mono, softly faded and attenuated with peak/RMS caps,
 then encoded as 44.1 kHz 16-bit PCM WAV. No post-filter gain boost is applied. Historical derivatives in recovery remain CC BY 3.0; current runtime effects

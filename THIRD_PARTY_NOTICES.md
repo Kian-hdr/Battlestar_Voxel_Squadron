@@ -2,7 +2,7 @@
 
 ## Project software
 
-Created by **Kian Konrad Tajbakhsh**. Original software and documentation authored for this project are offered under the [MIT License](LICENSE), only to the extent the author owns the relevant rights. Retain its copyright and permission notice when copying or modifying substantial portions.
+Created by **Kian Konrad**. Original software and documentation authored for this project are offered under the [MIT License](LICENSE), only to the extent the author owns the relevant rights. Retain its copyright and permission notice when copying or modifying substantial portions.
 
 ## Fan theme and names
 
@@ -26,7 +26,7 @@ Five released crates omit upstream license texts: block 0.1.6, dispatch 0.2.0, m
 
 The three public fallback WAV files in assets/Audio/Public are modified samples by **Michel Baradari** (apollo-music.de), under **Creative Commons Attribution 3.0 Unported (CC BY 3.0)**. Sources: [Chaingun, pistol, rifle, shotgun shots](https://opengameart.org/content/chaingun-pistol-rifle-shotgun-shots) and [2 High Quality Explosions](https://opengameart.org/content/2-high-quality-explosions). [License](https://creativecommons.org/licenses/by/3.0/), [legal code](https://creativecommons.org/licenses/by/3.0/legalcode).
 
-Modifications: trimmed, pitch-adjusted, filtered, layered, mixed to mono, faded, peak-scaled and PCM-encoded by Kian Konrad Tajbakhsh/Battlestar Voxel. Original and modified samples retain CC BY 3.0, separate from MIT code. No endorsement is implied. Retain Public/NOTICE.txt, the original source notices and assets/Audio/Licenses/Attribution.txt. Public source builds select these fallback samples without an account or proprietary media; see [audio source selection](docs/Audio_Public_Source.md).
+Modifications: trimmed, pitch-adjusted, filtered, layered, mixed to mono, faded, peak-scaled and PCM-encoded by Kian Konrad/Battlestar Voxel. Original and modified samples retain CC BY 3.0, separate from MIT code. No endorsement is implied. Retain Public/NOTICE.txt, the original source notices and assets/Audio/Licenses/Attribution.txt. Public source builds select these fallback samples without an account or proprietary media; see [audio source selection](docs/Audio_Public_Source.md).
 
 ## Incorporated generated electronic effects
 
