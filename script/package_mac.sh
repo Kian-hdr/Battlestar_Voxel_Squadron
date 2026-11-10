@@ -25,7 +25,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleVersion</key><string>20</string>
 <key>LSMinimumSystemVersion</key><string>12.0</string>
 <key>NSHighResolutionCapable</key><true/>
-<key>NSHumanReadableCopyright</key><string>Copyright 2026 Kian Konrad Tajbakhsh. Unofficial non-commercial fan project.</string>
+<key>NSHumanReadableCopyright</key><string>Copyright 2026 Kian Konrad. Unofficial non-commercial fan project.</string>
 <key>CFBundleIconName</key><string>Battlestar_Voxel</string>
 <key>CFBundleIconFile</key><string>Battlestar_Voxel</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
