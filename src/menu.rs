@@ -335,7 +335,7 @@ pub(super) fn spawn(commands: &mut Commands, fonts: &mut Assets<Font>) -> Entity
             BorderColor::all(LINE),
         ))
         .id();
-    let creator = text(commands, "Created by Kian Konrad Tajbakhsh", 14., WHITE);
+    let creator = text(commands, "Created by Kian Konrad", 14., WHITE);
     let credits = text(
         commands,
         "Unofficial noncommercial fan prototype.",
